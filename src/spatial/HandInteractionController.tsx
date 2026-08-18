@@ -5,8 +5,9 @@ import { handRuntime } from '../input/hand/handRuntime';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { cameraFacingPlane, fallbackPointerPoint, normalizedHandToNdc, setSpatialRuntime } from './cameraRuntime';
 import { interactionRuntime } from './interactionRuntime';
-import { getSpatialTargets } from './targetRegistry';
+import { getSpatialTargets, type SpatialTarget } from './targetRegistry';
 import { choosePrimaryHand } from './handSelection';
+import { activateSpatialContentControl } from './domContentInteraction';
 
 interface GrabState {
   id: string;
@@ -26,26 +27,38 @@ interface TransformState {
   startRotation: number;
 }
 
+interface SpatialHit {
+  hit: THREE.Intersection;
+  target: SpatialTarget;
+  zOrder: number;
+}
+
+const DEPTH_PRIORITY_EPSILON = 0.08;
 const pickRaycaster = new THREE.Raycaster();
 const moveRaycaster = new THREE.Raycaster();
 const tempPoint = new THREE.Vector3();
 const fallbackPoint = new THREE.Vector3();
 
-function raycastWindow(ndc: THREE.Vector2, camera: THREE.Camera) {
+function raycastWindow(ndc: THREE.Vector2, camera: THREE.Camera): SpatialHit | null {
   const targets = getSpatialTargets();
   if (!targets.length) return null;
   pickRaycaster.setFromCamera(ndc, camera);
-  const objectToId = new Map(targets.map(({ id, object }) => [object.uuid, id]));
-  const hits = pickRaycaster.intersectObjects(targets.map(({ object }) => object), false);
-  if (!hits.length) return null;
-
+  const objectToTarget = new Map(targets.map((target) => [target.object.uuid, target]));
   const desktop = useDesktopStore.getState();
-  const candidates = hits
-    .map((hit) => ({ hit, id: objectToId.get(hit.object.uuid) }))
-    .filter((item): item is { hit: THREE.Intersection; id: string } => Boolean(item.id))
-    .map((item) => ({ ...item, zOrder: desktop.windows.find((windowModel) => windowModel.id === item.id)?.zOrder ?? 0 }));
+  const candidates = pickRaycaster.intersectObjects(targets.map(({ object }) => object), false)
+    .map((hit) => ({ hit, target: objectToTarget.get(hit.object.uuid) }))
+    .filter((item): item is { hit: THREE.Intersection; target: SpatialTarget } => Boolean(item.target))
+    .map((item) => ({
+      ...item,
+      zOrder: desktop.windows.find((windowModel) => windowModel.id === item.target.windowId)?.zOrder ?? 0,
+    }));
 
-  candidates.sort((a, b) => b.zOrder - a.zOrder || a.hit.distance - b.hit.distance);
+  candidates.sort((a, b) => {
+    const distanceDelta = a.hit.distance - b.hit.distance;
+    if (Math.abs(distanceDelta) > DEPTH_PRIORITY_EPSILON) return distanceDelta;
+    if (a.target.windowId === b.target.windowId && a.target.priority !== b.target.priority) return b.target.priority - a.target.priority;
+    return b.zOrder - a.zOrder || distanceDelta;
+  });
   return candidates[0] ?? null;
 }
 
@@ -87,7 +100,6 @@ export function HandInteractionController() {
       return;
     }
 
-    // Continue an existing two-hand transform only while both owning hands remain present and pinching.
     if (transformRef.current) {
       const tx = transformRef.current;
       const a = hands.find((hand) => hand.id === tx.handIds[0] && hand.pinching);
@@ -95,7 +107,7 @@ export function HandInteractionController() {
       if (a && b) {
         ndcA.copy(normalizedHandToNdc(a.pinchPoint.x, a.pinchPoint.y));
         ndcB.copy(normalizedHandToNdc(b.pinchPoint.x, b.pinchPoint.y));
-        const distance = ndcA.distanceTo(ndcB);
+        const distance = Math.max(ndcA.distanceTo(ndcB), 0.04);
         const angle = Math.atan2(ndcB.y - ndcA.y, ndcB.x - ndcA.x);
         midpointNdc.set((ndcA.x + ndcB.x) / 2, (ndcA.y + ndcB.y) / 2);
         moveRaycaster.setFromCamera(midpointNdc, camera);
@@ -107,6 +119,7 @@ export function HandInteractionController() {
         });
         interactionRuntime.getState().setState({
           hoveredWindowId: tx.id,
+          hoveredRegion: 'chrome',
           activeWindowId: tx.id,
           primaryHandId: a.id,
           activeHandIds: [a.id, b.id],
@@ -116,6 +129,7 @@ export function HandInteractionController() {
         previousPinchesRef.current = pinchingIds;
         return;
       }
+
       const remaining = hands.find((hand) => tx.handIds.includes(hand.id) && hand.pinching);
       if (remaining) {
         const model = desktop.windows.find((windowModel) => windowModel.id === tx.id && windowModel.open && !windowModel.minimized);
@@ -131,7 +145,6 @@ export function HandInteractionController() {
       transformRef.current = null;
     }
 
-    // Upgrade a one-hand grab to a two-hand transform without requiring the first hand to re-pinch.
     if (pinching.length >= 2) {
       const grabOwner = grabRef.current ? pinching.find((hand) => hand.id === grabRef.current?.handId) : null;
       const a = grabOwner ?? pinching[0];
@@ -139,8 +152,12 @@ export function HandInteractionController() {
       ndcA.copy(normalizedHandToNdc(a.pinchPoint.x, a.pinchPoint.y));
       ndcB.copy(normalizedHandToNdc(b.pinchPoint.x, b.pinchPoint.y));
       midpointNdc.set((ndcA.x + ndcB.x) / 2, (ndcA.y + ndcB.y) / 2);
+
+      const hitA = raycastWindow(ndcA, camera);
+      const hitB = raycastWindow(ndcB, camera);
       const midHit = raycastWindow(midpointNdc, camera);
-      const id = grabRef.current?.id ?? midHit?.id ?? null;
+      const sameWindowId = hitA && hitB && hitA.target.windowId === hitB.target.windowId ? hitA.target.windowId : null;
+      const id = grabRef.current?.id ?? sameWindowId ?? midHit?.target.windowId ?? null;
       const model = id ? desktop.windows.find((windowModel) => windowModel.id === id && windowModel.open && !windowModel.minimized) : null;
 
       if (id && model) {
@@ -164,6 +181,7 @@ export function HandInteractionController() {
         grabRef.current = null;
         interactionRuntime.getState().setState({
           hoveredWindowId: id,
+          hoveredRegion: 'chrome',
           activeWindowId: id,
           primaryHandId: a.id,
           activeHandIds: [a.id, b.id],
@@ -190,12 +208,15 @@ export function HandInteractionController() {
       if (!grabRef.current && isPinchStart) {
         ndcA.copy(normalizedHandToNdc(primary.pinchPoint.x, primary.pinchPoint.y));
         const hit = raycastWindow(ndcA, camera);
-        const model = hit ? desktop.windows.find((windowModel) => windowModel.id === hit.id && windowModel.open && !windowModel.minimized) : null;
-        if (hit && model) {
-          desktop.focusWindow(hit.id);
+        const model = hit ? desktop.windows.find((windowModel) => windowModel.id === hit.target.windowId && windowModel.open && !windowModel.minimized) : null;
+        if (hit?.target.region === 'chrome' && model) {
+          desktop.focusWindow(hit.target.windowId);
           const anchor = new THREE.Vector3(...model.position);
           const plane = cameraFacingPlane(camera, hit.hit.point);
-          grabRef.current = { id: hit.id, handId: primary.id, plane, offset: anchor.clone().sub(hit.hit.point) };
+          grabRef.current = { id: hit.target.windowId, handId: primary.id, plane, offset: anchor.clone().sub(hit.hit.point) };
+        } else if (hit?.target.region === 'content' && model) {
+          desktop.focusWindow(hit.target.windowId);
+          activateSpatialContentControl(hit.target.windowId, primary.pinchPoint.x, primary.pinchPoint.y);
         }
       }
 
@@ -209,26 +230,28 @@ export function HandInteractionController() {
       grabRef.current = null;
     }
 
-    if (primary.gesture === 'FIST' && hover?.id && !grabRef.current) {
-      const model = desktop.windows.find((windowModel) => windowModel.id === hover.id && windowModel.open && !windowModel.minimized);
+    if (primary.gesture === 'FIST' && hover?.target.windowId && !grabRef.current) {
+      const model = desktop.windows.find((windowModel) => windowModel.id === hover.target.windowId && windowModel.open && !windowModel.minimized);
       if (model?.focused && Math.abs(model.rotationZ) > 0.002) desktop.setWindowTransform(model.id, { rotationZ: 0 });
     }
 
     const activeId = grabRef.current?.id ?? null;
     const pointerHit = activeId ? (() => {
-      const target = getSpatialTargets().find(({ id }) => id === activeId)?.object;
+      const target = getSpatialTargets().find((entry) => entry.windowId === activeId && entry.region === 'chrome')?.object;
       if (!target) return undefined;
       pickRaycaster.setFromCamera(ndcA, camera);
       return pickRaycaster.intersectObject(target, false)[0]?.point;
     })() : hover?.hit.point;
 
+    const contentPinch = !activeId && primary.pinching && hover?.target.region === 'content';
     interactionRuntime.getState().setState({
-      hoveredWindowId: activeId ?? hover?.id ?? null,
+      hoveredWindowId: activeId ?? hover?.target.windowId ?? null,
+      hoveredRegion: activeId ? 'chrome' : hover?.target.region ?? null,
       activeWindowId: activeId,
       primaryHandId: primary.id,
       activeHandIds: activeId ? [primary.id] : [],
       pointerWorld: pointerWorldForNdc(camera, ndcA, pointerHit),
-      mode: activeId ? 'grab' : hover ? 'hover' : 'idle',
+      mode: activeId ? 'grab' : contentPinch ? 'content' : hover ? 'hover' : 'idle',
     });
     previousPinchesRef.current = pinchingIds;
   });

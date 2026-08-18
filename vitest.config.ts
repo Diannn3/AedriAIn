@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    setupFiles: ['./tests/setup.ts'],
     coverage: { enabled: false },
   },
 });

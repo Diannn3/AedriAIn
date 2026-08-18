@@ -58,6 +58,7 @@ assert.deepEqual(parseLocalCommand('open map'), { type: 'APP_OPEN', appId: 'map'
 assert.deepEqual(parseLocalCommand('close my notes'), { type: 'APP_CLOSE', appId: 'notes' });
 assert.deepEqual(parseLocalCommand('study mode'), { type: 'WORKSPACE_APPLY', workspaceId: 'study' });
 assert.deepEqual(parseLocalCommand('planning mode'), { type: 'WORKSPACE_APPLY', workspaceId: 'planning' });
+assert.deepEqual(parseLocalCommand('research mode'), { type: 'WORKSPACE_APPLY', workspaceId: 'research' });
 assert.deepEqual(parseLocalCommand('new notes'), { type: 'APP_SPAWN', appId: 'notes' });
 assert.deepEqual(parseLocalCommand('reset workspace'), { type: 'WORKSPACE_RESET' });
 assert.deepEqual(parseLocalCommand('hide all'), { type: 'WORKSPACE_SET_ALL', open: false });

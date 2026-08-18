@@ -1,4 +1,4 @@
-export type AppId = 'notes' | 'tasks' | 'calendar' | 'map' | 'files' | 'assistant';
+export type AppId = 'notes' | 'tasks' | 'calendar' | 'map' | 'files' | 'document' | 'assistant';
 export type Vec3Tuple = [number, number, number];
 
 export interface SpatialWindowTransform {
@@ -7,19 +7,30 @@ export interface SpatialWindowTransform {
   scale: number;
 }
 
-export interface SpatialWindowModel extends SpatialWindowTransform {
+export interface SpatialWindowGeometry {
+  width: number;
+  height: number;
+}
+
+export interface SpatialWindowBounds {
+  minWidth: number;
+  minHeight: number;
+  maxWidth: number;
+  maxHeight: number;
+}
+
+export interface SpatialWindowModel extends SpatialWindowTransform, SpatialWindowGeometry {
   id: string;
   appId: AppId;
   resourceId?: string;
   title: string;
-  width: number;
-  height: number;
   open: boolean;
   focused: boolean;
   minimized: boolean;
   maximized: boolean;
   zOrder: number;
   restoreTransform?: SpatialWindowTransform;
+  restoreGeometry?: SpatialWindowGeometry;
 }
 
 export interface NoteRecord {
@@ -30,12 +41,54 @@ export interface NoteRecord {
   updatedAt: number;
 }
 
-export interface TaskItem {
+export type TaskStatus = 'todo' | 'done';
+
+export interface TaskRecord {
   id: string;
   title: string;
-  dueLabel: string;
-  done: boolean;
+  description?: string;
+  dueAt?: number;
+  status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type DocumentSourceKind = 'electron' | 'browser';
+
+export interface DocumentRecord {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  sourceKind: DocumentSourceKind;
+  sourceId: string;
+  lastOpenedAt: number;
+  currentPage: number;
+  zoom: number;
+  rotation: number;
+}
+
+export interface BrowserBlobRecord {
+  id: string;
+  blob: Blob;
+}
+
+export interface AppSettingRecord {
+  key: string;
+  value: unknown;
+}
+
+export interface GestureProfile {
+  id: string;
+  name: string;
+  preferredHand: 'left' | 'right' | 'automatic';
+  pinchOn: number;
+  pinchOff: number;
+  pointerSmoothing: number;
+  dragSmoothing: number;
+  sensitivity: number;
+  updatedAt: number;
 }
 
 export interface FileDescriptor {
@@ -53,6 +106,8 @@ export interface DesktopBridge {
   pickFiles(): Promise<FileDescriptor[]>;
   openFile(fileId: string): Promise<{ ok: boolean; error?: string }>;
   readFile(fileId: string): Promise<FileReadResult>;
+  fileResourceUrl(fileId: string): string;
+  revokeFile(fileId: string): Promise<{ ok: boolean }>;
   platform(): Promise<string>;
 }
 

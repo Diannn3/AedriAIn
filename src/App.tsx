@@ -20,13 +20,13 @@ function DesktopShell() {
   return (
     <main className="desktop-shell">
       <SpatialScene />
-      <div className="brand-lockup"><span className="brand-glyph">A</span><div><b>AEDRIAIN</b><small>WEBCAM SPATIAL DESKTOP · CORE V2.1</small></div></div>
+      <div className="brand-lockup"><span className="brand-glyph">A</span><div><b>AEDRIAIN</b><small>SPATIAL DESKTOP · DOCUMENTS V1</small></div></div>
       <StatusHUD />
       <AppDock />
       <CommandBar />
       <HandCursor />
       {toast && <div className="toast">{toast}</div>}
-      <div className="gesture-help"><span>☝ POINT</span><span>🤏 PINCH / GRAB</span><span>🤏 🤏 MOVE / SCALE / ROTATE</span><span>✊ RESET ROTATION</span></div>
+      <div className="gesture-help"><span>☝ POINT</span><span>🤏 HEADER · MOVE</span><span>🤏 CONTENT · INTERACT</span><span>🤏 🤏 MOVE / SCALE / ROTATE</span></div>
     </main>
   );
 }

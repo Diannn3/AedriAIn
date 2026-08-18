@@ -1,16 +1,18 @@
 import { createStore } from 'zustand/vanilla';
 import type { Vec3Tuple } from '../core/types';
+import type { SpatialTargetRegion } from './targetRegistry';
 
-export type InteractionMode = 'idle' | 'hover' | 'grab' | 'transform';
+export type InteractionMode = 'idle' | 'hover' | 'content' | 'grab' | 'transform';
 
 export interface SpatialInteractionState {
   hoveredWindowId: string | null;
+  hoveredRegion: SpatialTargetRegion | null;
   activeWindowId: string | null;
   primaryHandId: string | null;
   activeHandIds: string[];
   pointerWorld: Vec3Tuple | null;
   mode: InteractionMode;
-  setState: (patch: Partial<Omit<SpatialInteractionState, 'setState'>>) => void;
+  setState: (patch: Partial<Omit<SpatialInteractionState, 'setState' | 'reset'>>) => void;
   reset: () => void;
 }
 
@@ -24,6 +26,7 @@ const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((
 
 const initialState = {
   hoveredWindowId: null,
+  hoveredRegion: null,
   activeWindowId: null,
   primaryHandId: null,
   activeHandIds: [] as string[],
@@ -38,6 +41,7 @@ export const interactionRuntime = createStore<SpatialInteractionState>((set, get
     const next = { ...current, ...patch };
     if (
       next.hoveredWindowId === current.hoveredWindowId &&
+      next.hoveredRegion === current.hoveredRegion &&
       next.activeWindowId === current.activeWindowId &&
       next.primaryHandId === current.primaryHandId &&
       sameIds(next.activeHandIds, current.activeHandIds) &&

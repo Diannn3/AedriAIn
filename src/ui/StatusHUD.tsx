@@ -15,7 +15,7 @@ export function StatusHUD() {
       <div><small>VISION</small><b>{vision}</b></div>
       <div><small>RENDER</small><b>{render.fps ? `${render.fps.toFixed(0)} FPS · ${render.dpr.toFixed(1)}×` : 'BOOTING'}</b></div>
       <div><small>FRAMES</small><b>{hand.enabled ? `${hand.droppedFrames} DROP` : '—'}</b></div>
-      <div><small>CORE</small><b>SPATIAL V2.1</b></div>
+      <div><small>CORE</small><b>DOCUMENTS V1</b></div>
     </div>
   );
 }

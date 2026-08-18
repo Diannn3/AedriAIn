@@ -1,15 +1,32 @@
 import type * as THREE from 'three';
 
-const targets = new Map<string, THREE.Object3D>();
+export type SpatialTargetRegion = 'chrome' | 'content';
 
-export const registerSpatialTarget = (id: string, object: THREE.Object3D) => {
-  object.userData.windowId = id;
-  targets.set(id, object);
+export interface SpatialTarget {
+  key: string;
+  windowId: string;
+  region: SpatialTargetRegion;
+  object: THREE.Object3D;
+  priority: number;
+}
+
+const targets = new Map<string, SpatialTarget>();
+
+export const registerSpatialTarget = (
+  windowId: string,
+  region: SpatialTargetRegion,
+  object: THREE.Object3D,
+  priority = region === 'chrome' ? 20 : 10,
+) => {
+  const key = `${windowId}:${region}`;
+  object.userData.windowId = windowId;
+  object.userData.spatialRegion = region;
+  targets.set(key, { key, windowId, region, object, priority });
   return () => {
-    if (targets.get(id) === object) targets.delete(id);
+    if (targets.get(key)?.object === object) targets.delete(key);
   };
 };
 
-export const getSpatialTargets = () => [...targets.entries()].map(([id, object]) => ({ id, object }));
-export const getSpatialTarget = (id: string) => targets.get(id) ?? null;
+export const getSpatialTargets = () => [...targets.values()];
+export const getSpatialTargetsForWindow = (windowId: string) => [...targets.values()].filter((target) => target.windowId === windowId);
 export const clearSpatialTargets = () => targets.clear();

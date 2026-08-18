@@ -17,6 +17,7 @@ export function parseLocalCommand(input: string): DesktopCommand | null {
 
   if (/\b(study mode|study layout|study workspace)\b/i.test(text)) return { type: 'WORKSPACE_APPLY', workspaceId: 'study' };
   if (/\b(planning mode|planning layout|planning workspace)\b/i.test(text)) return { type: 'WORKSPACE_APPLY', workspaceId: 'planning' };
+  if (/\b(research mode|research layout|research workspace)\b/i.test(text)) return { type: 'WORKSPACE_APPLY', workspaceId: 'research' };
   if (/\b(minimal mode|minimal layout|minimal workspace)\b/i.test(text)) return { type: 'WORKSPACE_APPLY', workspaceId: 'minimal' };
   if (/\breset( workspace| layout)?\b/i.test(text)) return { type: 'WORKSPACE_RESET' };
   if (/\b(show|open) all\b/i.test(text)) return { type: 'WORKSPACE_SET_ALL', open: true };

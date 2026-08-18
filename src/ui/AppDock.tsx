@@ -6,7 +6,7 @@ export function AppDock() {
   const windows = useDesktopStore((s) => s.windows);
   return (
     <nav className="app-dock" aria-label="Spatial apps">
-      {Object.values(apps).map((app) => {
+      {Object.values(apps).filter((app) => app.showInDock).map((app) => {
         const open = windows.some((w) => w.appId === app.id && w.open);
         return <button key={app.id} className={open ? 'app-dock__item app-dock__item--open' : 'app-dock__item'} onClick={() => openApp(app.id)} title={app.title}><span>{app.icon}</span><small>{app.title}</small></button>;
       })}

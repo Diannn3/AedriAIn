@@ -6,3 +6,18 @@ references/
 *.log
 .DS_Store
 Thumbs.db
+
+# Generated runtime assets (staged from pinned npm packages)
+public/mediapipe/models/*
+!public/mediapipe/models/.gitkeep
+public/mediapipe/wasm/*
+!public/mediapipe/wasm/.gitkeep
+public/pdfjs/pdf.worker.min.mjs
+public/pdfjs/cmaps/*
+!public/pdfjs/cmaps/.gitkeep
+public/pdfjs/standard_fonts/*
+!public/pdfjs/standard_fonts/.gitkeep
+public/pdfjs/wasm/*
+!public/pdfjs/wasm/.gitkeep
+public/pdfjs/iccs/*
+!public/pdfjs/iccs/.gitkeep

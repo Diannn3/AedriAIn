@@ -22,8 +22,8 @@ jobs:
           if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
       - name: Bootstrap core tests
         run: npm run test:bootstrap
-      - name: Stage local MediaPipe assets
-        run: npm run assets:mediapipe
+      - name: Stage local runtime assets
+        run: npm run setup
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests
@@ -46,6 +46,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+      - run: npm run setup
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v7
@@ -68,7 +69,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
-      - run: npm run assets:mediapipe
+      - run: npm run setup
       - run: npm run build
       - name: Production Electron smoke
         run: xvfb-run -a npm run test:electron
