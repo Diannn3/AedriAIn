@@ -6,6 +6,7 @@ export interface Landmark {
 }
 
 export interface TrackedHand {
+  trackingId: string;
   handedness: 'Left' | 'Right' | 'Unknown';
   landmarks: Landmark[];
   worldLandmarks: Landmark[];

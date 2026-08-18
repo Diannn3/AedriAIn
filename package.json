@@ -1,8 +1,8 @@
 {
-  "name": "spatial-student-desktop",
-  "version": "0.1.0",
+  "name": "aedriain",
+  "version": "0.2.0",
   "private": true,
-  "description": "Webcam hand-tracked spatial desktop shell for student productivity and UPLB modules.",
+  "description": "Webcam-controlled holographic spatial desktop for files, schedules, maps, tasks, notes, and AI.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -12,7 +12,8 @@
     "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "desktop": "electron .",
     "typecheck": "tsc -b --pretty false",
-    "test:core": "bash scripts/test-core.sh"
+    "test:core": "bash scripts/test-core.sh",
+    "check": "npm run typecheck && npm run test:core && npm run build"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
@@ -35,5 +36,8 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.16",
     "wait-on": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

@@ -3,7 +3,9 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { AssistantOrb } from './AssistantOrb';
+import { HandInteractionController } from './HandInteractionController';
 import { SpatialWindow } from './SpatialWindow';
+import { SpatialPointerBeam } from './SpatialPointerBeam';
 
 function AmbientScene() {
   const grid = useRef<THREE.GridHelper>(null);
@@ -37,7 +39,14 @@ function AmbientScene() {
 
 function DesktopObjects() {
   const windows = useDesktopStore((s) => s.windows);
-  return <>{windows.filter((w) => w.open).sort((a, b) => a.zOrder - b.zOrder).map((model) => <SpatialWindow key={model.id} model={model} />)}<AssistantOrb /></>;
+  return (
+    <>
+      {windows.filter((w) => w.open && !w.minimized).sort((a, b) => a.zOrder - b.zOrder).map((model) => <SpatialWindow key={model.id} model={model} />)}
+      <AssistantOrb />
+      <HandInteractionController />
+      <SpatialPointerBeam />
+    </>
+  );
 }
 
 export function SpatialScene() {

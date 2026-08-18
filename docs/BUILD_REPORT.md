@@ -1,39 +1,48 @@
-# Prototype 01 build report
+# Core V2 implementation report
 
-## Implemented
+## Implemented in this pass
 
-- Worker-based MediaPipe Hand Landmarker scaffold (2 hands, GPU-first)
-- Hand runtime separate from persistent React state
-- Scale-normalized pinch metric
-- Pinch hysteresis and pointer smoothing
-- One-hand window dragging
-- Two-hand relative scale + rotation
-- Mouse drag and explicit resize fallback
-- Holographic R3F scene + animated assistant orb
-- Notes, Tasks, Calendar, Map placeholder, Files, AI Console modules
-- Persistent workspace / notes / tasks
-- Typed desktop command bus
-- Local text commands and optional browser speech-recognition input
-- Electron renderer sandbox + context isolation + allow-listed preload API
-- User-approved file picker/open path flow
-- Reference cloning script
-- Research / third-party notes
-- Core gesture and command parser tests
+- Three.js raycast-based hand target selection
+- Camera-facing ray/plane world-space dragging
+- Two-hand translation + relative scale + rotation
+- Mouse dragging moved to the same camera/plane math
+- Removed DOM rectangle hit-testing path
+- Stable temporal hand IDs across detector reordering
+- Worker lifecycle phases and dropped-frame telemetry
+- GPU initialization with CPU fallback and timeout handling
+- MediaPipe model pinned from `latest` to `float16/1`
+- Focus invariants fixed so closed windows cannot remain focused
+- Persisted workspace schema bumped to v2 with migration
+- Generic Maps scope (no UPLB dependency in core)
+- App implementations split under `src/apps/`
+- Typed app capability names introduced
+- File rows can open user-selected files through the existing restricted bridge
+- Calendar demo generated from the current week instead of a hardcoded date
+- Vite relative production base for desktop packaging
+- Electron production custom protocol (`aedriain://app`)
+- Electron IPC sender validation and permission-check handler
 
-## Verified in this environment
+## Verified locally without external dependencies
 
 - `scripts/test-core.sh` passes
-- Electron main/preload files pass `node --check`
-- Reference clone script passes `bash -n`
+  - gesture classification
+  - pinch normalization/hysteresis
+  - stable hand identity across detector order swaps
+  - local command parsing
+- Electron main/preload pass `node --check`
+- `git diff --check` passes
 
 ## Environment limitation
 
-The execution container cannot resolve GitHub/npm hosts, so dependencies could not be installed and the full Vite/R3F application could not be launched here. Run `npm install && npm run dev` on a networked machine for the first visual/runtime test.
+This execution environment cannot resolve GitHub/npm hosts, and the repository does not include `node_modules` or a lockfile. The full React/R3F/Vite typecheck and runtime launch therefore still require a networked development runner.
 
-## First runtime checks to perform
+## Required first runtime checks
 
-1. Confirm MediaPipe WASM/model URLs are permitted by the browser CSP.
-2. Confirm camera frame transfer works in Chromium/Opera and Electron.
-3. Tune pinch thresholds on 3-5 users/camera distances.
-4. Replace approximate pixel-to-world drag mapping with camera ray-plane math.
-5. Profile hand inference and R3F frame time independently.
+1. `npm install`
+2. `npm run typecheck`
+3. `npm run build`
+4. `npm run dev` and verify camera GPU path + CPU fallback
+5. Verify one-hand world-space dragging at multiple viewport sizes
+6. Verify two-hand translate/scale/rotate with hand order changes
+7. Verify production `npm run desktop` resolves all assets through `aedriain://app`
+8. Profile render FPS, inference latency, dropped frames, and memory

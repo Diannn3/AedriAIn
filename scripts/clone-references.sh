@@ -11,6 +11,8 @@ repos=(
   "https://github.com/Necookie-Labs/Voxel-Manipulation-via-Hand-Tracking.git"
   "https://github.com/pmndrs/react-three-fiber.git"
   "https://github.com/pmndrs/uikit.git"
+  "https://github.com/collidingScopes/stark-shapes.git"
+  "https://github.com/pmndrs/drei.git"
 )
 for repo in "${repos[@]}"; do
   name="$(basename "$repo" .git)"

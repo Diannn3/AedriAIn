@@ -1,19 +1,27 @@
-# Research references used for Prototype 01
+# Public reference research
 
-The implementation is fresh code. The following public projects were studied for interaction and architecture patterns:
+The implementation remains fresh code. Public projects are used to avoid reinventing solved interaction patterns while keeping AedriAIn's architecture independent.
 
-- `heeelol/jester` — clean pinch hysteresis, one-hand grab, two-hand relative scale/rotation, voice-to-structured-action architecture, phone controller concept.
-- `google-ai-edge/mediapipe-samples-web` — 2026 worker-based Hand Landmarker pattern and two-hand tracking.
-- `Necookie-Labs/Voxel-Manipulation-via-Hand-Tracking` — simple MediaPipe + Three.js gesture mapping and screen/world interaction prototype.
-- `quiet-node/gesture-lab` — modern MediaPipe + Three.js + TypeScript visual experiments and spatial interaction ideas.
-- `SAGAR-TAMANG/ultron-by-sagar-builds` — holographic UI/orb visual reference.
-- `pmndrs/react-three-fiber` / `pmndrs/drei` — React/Three scene architecture and HTML-in-3D bridge.
-- `pmndrs/uikit` — future native 3D UI layer; intentionally not required for the first MVP.
+## Core references
 
-## Important differences from the references
+- `google-ai-edge/mediapipe-samples-web` — 2026 worker-based MediaPipe Tasks pattern, pinned model URLs, model-buffer loading, E2E testing architecture.
+- `pmndrs/drei` — `DragControls` validates the camera-ray + camera-facing-plane + preserved drag-offset pattern used by Core V2.
+- `pmndrs/react-three-fiber` — scene/event architecture and Three.js integration.
+- `heeelol/jester` — behavioral reference for pinch hysteresis, one-hand grab, two-hand transforms, voice-to-structured-action design, phone-controller idea. No source is vendored because no repository license was found during inspection.
+- `quiet-node/gesture-lab` — MIT; visual/interaction experiments, MediaPipe + Three.js + TypeScript, physics and shader inspiration.
+- `SAGAR-TAMANG/ultron-by-sagar-builds` — MIT; holographic HUD/orb visual reference.
+- `collidingScopes/stark-shapes` — hand-driven camera/particle behavior reference for the later visual pass.
+- `Necookie-Labs/Voxel-Manipulation-via-Hand-Tracking` — simple gesture mapping reference.
+- `pmndrs/uikit` — later native spatial UI option once the window interaction contract is stable.
 
-- This code separates high-frequency hand runtime state from persistent desktop/app state.
-- Spatial windows are modules, not hard-coded holograms.
-- Mouse fallback is first-class.
-- The assistant layer is represented as a command interface, not coupled to one AI provider.
-- Electron privileged access is kept behind an allow-listed preload bridge.
+## What was reused conceptually in Core V2
+
+- MediaPipe worker isolation
+- scale-normalized pinch + hysteresis
+- camera-derived raycasting
+- drag planes perpendicular to the camera
+- preserved grab offsets
+- relative two-hand distance/angle transforms
+- typed command/tool boundary
+
+No reference repository has been copied wholesale into the product.

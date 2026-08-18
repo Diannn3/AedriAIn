@@ -45,7 +45,7 @@ export class GestureEngine {
   private readonly smoothing = 0.42;
 
   analyze(hand: TrackedHand, index: number) {
-    const id = `${hand.handedness}-${index}`;
+    const id = hand.trackingId || `${hand.handedness}-${index}`;
     const strength = getPinchStrength(hand.landmarks);
     const wasPinching = this.pinchState.get(id) ?? false;
     const pinching = wasPinching ? strength < this.pinchOff : strength < this.pinchOn;

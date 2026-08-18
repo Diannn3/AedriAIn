@@ -1,4 +1,4 @@
-import { apps } from '../modules/registry';
+import { apps } from '../apps/registry';
 import { useDesktopStore } from '../store/useDesktopStore';
 
 export function AppDock() {

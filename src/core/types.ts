@@ -1,16 +1,22 @@
 export type AppId = 'notes' | 'tasks' | 'calendar' | 'map' | 'files' | 'assistant';
 export type Vec3Tuple = [number, number, number];
 
-export interface SpatialWindowModel {
-  id: string;
-  appId: AppId;
-  title: string;
+export interface SpatialWindowTransform {
   position: Vec3Tuple;
   rotationZ: number;
   scale: number;
+}
+
+export interface SpatialWindowModel extends SpatialWindowTransform {
+  id: string;
+  appId: AppId;
+  title: string;
   open: boolean;
   focused: boolean;
+  minimized: boolean;
+  maximized: boolean;
   zOrder: number;
+  restoreTransform?: SpatialWindowTransform;
 }
 
 export interface TaskItem {

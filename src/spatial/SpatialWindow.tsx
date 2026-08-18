@@ -1,70 +1,101 @@
 import { Html } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useStore } from 'zustand';
+import * as THREE from 'three';
 import type { SpatialWindowModel } from '../core/types';
-import { apps } from '../modules/registry';
+import { apps } from '../apps/registry';
 import { useDesktopStore } from '../store/useDesktopStore';
-import { removeWindowRect, setWindowRect } from './windowRectRegistry';
+import { cameraFacingPlane, getSpatialCamera, intersectScreenPlane } from './cameraRuntime';
+import { interactionRuntime } from './interactionRuntime';
+import { registerSpatialTarget } from './targetRegistry';
+
+interface MouseDragState {
+  plane: THREE.Plane;
+  offset: THREE.Vector3;
+}
 
 export function SpatialWindow({ model }: { model: SpatialWindowModel }) {
-  const domRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ x: number; y: number; position: [number, number, number] } | null>(null);
-  const setTransform = useDesktopStore((s) => s.setWindowTransform);
-  const focus = useDesktopStore((s) => s.focusWindow);
-  const close = useDesktopStore((s) => s.closeWindow);
+  const interactionRef = useRef<THREE.Mesh>(null);
+  const mouseDragRef = useRef<MouseDragState | null>(null);
+  const setTransform = useDesktopStore((state) => state.setWindowTransform);
+  const focus = useDesktopStore((state) => state.focusWindow);
+  const close = useDesktopStore((state) => state.closeWindow);
+  const minimize = useDesktopStore((state) => state.minimizeWindow);
+  const toggleMaximize = useDesktopStore((state) => state.toggleMaximizeWindow);
+  const hovered = useStore(interactionRuntime, (state) => state.hoveredWindowId === model.id);
+  const active = useStore(interactionRuntime, (state) => state.activeWindowId === model.id);
   const app = apps[model.appId];
-  const frameRef = useRef(0);
 
-  useFrame(() => {
-    frameRef.current += 1;
-    if (frameRef.current % 3 === 0 && domRef.current) setWindowRect(model.id, domRef.current.getBoundingClientRect());
-  });
-
-  useEffect(() => () => removeWindowRect(model.id), [model.id]);
+  useEffect(() => {
+    const object = interactionRef.current;
+    if (!object) return;
+    object.userData.windowId = model.id;
+    return registerSpatialTarget(model.id, object);
+  }, [model.id]);
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
-      if (!dragRef.current) return;
-      const dx = event.clientX - dragRef.current.x;
-      const dy = event.clientY - dragRef.current.y;
-      setTransform(model.id, {
-        position: [
-          dragRef.current.position[0] + (dx / window.innerWidth) * 8.2,
-          dragRef.current.position[1] - (dy / window.innerHeight) * 4.7,
-          dragRef.current.position[2],
-        ],
-      });
+      const drag = mouseDragRef.current;
+      const camera = getSpatialCamera();
+      if (!drag || !camera) return;
+      const point = intersectScreenPlane(camera, event.clientX, event.clientY, drag.plane);
+      if (!point) return;
+      setTransform(model.id, { position: point.clone().add(drag.offset).toArray() as [number, number, number] });
     };
-    const up = () => { dragRef.current = null; };
+    const up = () => { mouseDragRef.current = null; };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
   }, [model.id, setTransform]);
 
-  if (!model.open) return null;
+  if (!model.open || model.minimized) return null;
 
   const beginDrag = (event: ReactPointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
     focus(model.id);
-    dragRef.current = { x: event.clientX, y: event.clientY, position: [...model.position] };
+    const camera = getSpatialCamera();
+    if (!camera) return;
+    const anchor = new THREE.Vector3(...model.position);
+    const plane = cameraFacingPlane(camera, anchor);
+    const point = intersectScreenPlane(camera, event.clientX, event.clientY, plane);
+    if (!point) return;
+    mouseDragRef.current = { plane, offset: anchor.clone().sub(point) };
   };
 
+  const visualZ = model.position[2] + Math.min(model.zOrder, 1000) * 0.0006;
+  const classes = [
+    'spatial-window',
+    model.focused ? 'spatial-window--focused' : '',
+    hovered ? 'spatial-window--hovered' : '',
+    active ? 'spatial-window--active' : '',
+    model.maximized ? 'spatial-window--maximized' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <group position={model.position} rotation={[0, 0, model.rotationZ]} scale={model.scale} renderOrder={model.zOrder}>
+    <group position={[model.position[0], model.position[1], visualZ]} rotation={[0, 0, model.rotationZ]} scale={model.scale} renderOrder={model.zOrder}>
+      <mesh ref={interactionRef} position={[0, 0, -0.015]}>
+        <planeGeometry args={[3.05, 2.12]} />
+        <meshBasicMaterial side={THREE.DoubleSide} transparent opacity={0} depthWrite={false} colorWrite={false} />
+      </mesh>
       <Html transform center distanceFactor={5.7} zIndexRange={[2000 + model.zOrder, model.zOrder]}>
-        <div ref={domRef} className={`spatial-window ${model.focused ? 'spatial-window--focused' : ''}`} onPointerDown={() => focus(model.id)}>
+        <div className={classes} onPointerDown={() => focus(model.id)}>
           <div className="window-scanline" />
-          <header className="window-header" onPointerDown={beginDrag}>
-            <div className="window-title"><span className="window-icon">{app.icon}</span><div><b>{model.title}</b><small>SPATIAL MODULE</small></div></div>
+          <header className="window-header" onPointerDown={beginDrag} onDoubleClick={(event) => { event.stopPropagation(); toggleMaximize(model.id); }}>
+            <div className="window-title"><span className="window-icon">{app.icon}</span><div><b>{model.title}</b><small>{active ? 'SPATIAL GRAB ACTIVE' : hovered ? 'SPATIAL TARGET' : 'SPATIAL MODULE'}</small></div></div>
             <div className="window-actions">
-              <button aria-label="Shrink" onClick={(e) => { e.stopPropagation(); setTransform(model.id, { scale: Math.max(0.65, model.scale - 0.08) }); }}>−</button>
-              <button aria-label="Grow" onClick={(e) => { e.stopPropagation(); setTransform(model.id, { scale: Math.min(1.75, model.scale + 0.08) }); }}>+</button>
-              <button aria-label="Close" onClick={(e) => { e.stopPropagation(); close(model.id); }}>×</button>
+              <button aria-label="Minimize" onClick={(event) => { event.stopPropagation(); minimize(model.id); }}>_</button>
+              <button aria-label={model.maximized ? 'Restore' : 'Maximize'} onClick={(event) => { event.stopPropagation(); toggleMaximize(model.id); }}>{model.maximized ? '◇' : '□'}</button>
+              <button aria-label="Shrink" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: Math.max(0.55, model.scale - 0.08) }); }}>−</button>
+              <button aria-label="Grow" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: Math.min(1.85, model.scale + 0.08) }); }}>+</button>
+              <button aria-label="Close" onClick={(event) => { event.stopPropagation(); close(model.id); }}>×</button>
             </div>
           </header>
           <section className="window-content">{app.render()}</section>
-          <footer className="window-footer"><span>PINCH + DRAG</span><span>2 HANDS · SCALE / ROTATE</span></footer>
+          <footer className="window-footer"><span>RAY + PINCH · MOVE</span><span>2 HANDS · MOVE / SCALE / ROTATE</span></footer>
         </div>
       </Html>
     </group>
