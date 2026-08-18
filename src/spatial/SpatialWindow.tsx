@@ -25,11 +25,11 @@ export function SpatialWindow({ model }: { model: SpatialWindowModel }) {
   const hovered = useStore(interactionRuntime, (state) => state.hoveredWindowId === model.id);
   const active = useStore(interactionRuntime, (state) => state.activeWindowId === model.id);
   const app = apps[model.appId];
+  const AppComponent = app.Component;
 
   useEffect(() => {
     const object = interactionRef.current;
     if (!object) return;
-    object.userData.windowId = model.id;
     return registerSpatialTarget(model.id, object);
   }, [model.id]);
 
@@ -50,8 +50,6 @@ export function SpatialWindow({ model }: { model: SpatialWindowModel }) {
       window.removeEventListener('pointerup', up);
     };
   }, [model.id, setTransform]);
-
-  if (!model.open || model.minimized) return null;
 
   const beginDrag = (event: ReactPointerEvent) => {
     event.preventDefault();
@@ -78,23 +76,23 @@ export function SpatialWindow({ model }: { model: SpatialWindowModel }) {
   return (
     <group position={[model.position[0], model.position[1], visualZ]} rotation={[0, 0, model.rotationZ]} scale={model.scale} renderOrder={model.zOrder}>
       <mesh ref={interactionRef} position={[0, 0, -0.015]}>
-        <planeGeometry args={[3.05, 2.12]} />
+        <planeGeometry args={[model.width, model.height]} />
         <meshBasicMaterial side={THREE.DoubleSide} transparent opacity={0} depthWrite={false} colorWrite={false} />
       </mesh>
       <Html transform center distanceFactor={5.7} zIndexRange={[2000 + model.zOrder, model.zOrder]}>
-        <div className={classes} onPointerDown={() => focus(model.id)}>
+        <div className={classes} onPointerDown={() => focus(model.id)} data-window-id={model.id}>
           <div className="window-scanline" />
           <header className="window-header" onPointerDown={beginDrag} onDoubleClick={(event) => { event.stopPropagation(); toggleMaximize(model.id); }}>
             <div className="window-title"><span className="window-icon">{app.icon}</span><div><b>{model.title}</b><small>{active ? 'SPATIAL GRAB ACTIVE' : hovered ? 'SPATIAL TARGET' : 'SPATIAL MODULE'}</small></div></div>
             <div className="window-actions">
               <button aria-label="Minimize" onClick={(event) => { event.stopPropagation(); minimize(model.id); }}>_</button>
               <button aria-label={model.maximized ? 'Restore' : 'Maximize'} onClick={(event) => { event.stopPropagation(); toggleMaximize(model.id); }}>{model.maximized ? '◇' : '□'}</button>
-              <button aria-label="Shrink" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: Math.max(0.55, model.scale - 0.08) }); }}>−</button>
-              <button aria-label="Grow" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: Math.min(1.85, model.scale + 0.08) }); }}>+</button>
+              <button aria-label="Shrink" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: model.scale - 0.08 }); }}>−</button>
+              <button aria-label="Grow" onClick={(event) => { event.stopPropagation(); setTransform(model.id, { scale: model.scale + 0.08 }); }}>+</button>
               <button aria-label="Close" onClick={(event) => { event.stopPropagation(); close(model.id); }}>×</button>
             </div>
           </header>
-          <section className="window-content">{app.render()}</section>
+          <section className="window-content"><AppComponent windowId={model.id} resourceId={model.resourceId} /></section>
           <footer className="window-footer"><span>RAY + PINCH · MOVE</span><span>2 HANDS · MOVE / SCALE / ROTATE</span></footer>
         </div>
       </Html>

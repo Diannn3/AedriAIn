@@ -1,0 +1,7 @@
+{
+  "frames": [
+    { "hands": [ { "handedness": "Left", "x": 0.30 }, { "handedness": "Right", "x": 0.70 } ] },
+    { "hands": [ { "handedness": "Right", "x": 0.69 }, { "handedness": "Left", "x": 0.31 } ] },
+    { "hands": [ { "handedness": "Left", "x": 0.33 }, { "handedness": "Right", "x": 0.67 } ] }
+  ]
+}

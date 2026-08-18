@@ -7,7 +7,7 @@ export function HandCursor() {
   const [interaction, setInteraction] = useState<SpatialInteractionState>(() => interactionRuntime.getState());
   useEffect(() => handRuntime.subscribe(setState), []);
   useEffect(() => interactionRuntime.subscribe(setInteraction), []);
-  const primary = state.hands[0];
+  const primary = state.hands.find((hand) => hand.id === interaction.primaryHandId) ?? state.hands[0];
   if (!state.enabled || !primary) return null;
   const x = (1 - primary.pointer.x) * window.innerWidth;
   const y = primary.pointer.y * window.innerHeight;

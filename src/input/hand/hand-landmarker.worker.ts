@@ -4,18 +4,18 @@ import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from '@med
 let landmarker: HandLandmarker | null = null;
 let initializing = false;
 
-const WASM_ROOT = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
-const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-
-async function initialize(delegate: 'GPU' | 'CPU') {
+async function initialize(delegate: 'GPU' | 'CPU', wasmRoot: string, modelUrl: string) {
   if (initializing) return;
   initializing = true;
   try {
     landmarker?.close();
     landmarker = null;
-    const fileset = await FilesetResolver.forVisionTasks(WASM_ROOT);
+    const fileset = await FilesetResolver.forVisionTasks(wasmRoot);
+    const modelResponse = await fetch(modelUrl);
+    if (!modelResponse.ok) throw new Error(`Hand model request failed (${modelResponse.status}). Run npm run assets:mediapipe.`);
+    const modelBuffer = await modelResponse.arrayBuffer();
     landmarker = await HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate },
+      baseOptions: { modelAssetBuffer: new Uint8Array(modelBuffer), delegate },
       runningMode: 'VIDEO',
       numHands: 2,
       minHandDetectionConfidence: 0.55,
@@ -34,7 +34,7 @@ self.onmessage = async (event: MessageEvent) => {
   const data = event.data;
 
   if (data.type === 'INIT') {
-    await initialize(data.delegate === 'CPU' ? 'CPU' : 'GPU');
+    await initialize(data.delegate === 'CPU' ? 'CPU' : 'GPU', String(data.wasmRoot), String(data.modelUrl));
     return;
   }
 

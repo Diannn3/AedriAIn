@@ -7,6 +7,8 @@ import type { TrackedHand } from './types';
 const TARGET_FRAME_MS = 1000 / 30;
 const INIT_TIMEOUT_MS = 12_000;
 
+const assetUrl = (path: string) => new URL(path, document.baseURI).toString();
+
 export function HandTrackingProvider({ children }: PropsWithChildren) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -15,7 +17,8 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
   const initTimerRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const readyRef = useRef(false);
-  const delegateRef = useRef<'GPU' | 'CPU'>('GPU');
+  const lastResultAtRef = useRef<number | null>(null);
+  const inferenceFpsRef = useRef(0);
   const gestureEngineRef = useRef(new GestureEngine());
   const identityTrackerRef = useRef(new HandIdentityTracker());
   const [enabled, setEnabled] = useState(false);
@@ -39,6 +42,8 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
     if (videoRef.current) videoRef.current.srcObject = null;
     gestureEngineRef.current.reset();
     identityTrackerRef.current.reset();
+    lastResultAtRef.current = null;
+    inferenceFpsRef.current = 0;
     handRuntime.getState().setState({
       enabled: false,
       tracking: false,
@@ -48,6 +53,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
       hands: [],
       error: null,
       inferenceTime: 0,
+      inferenceFps: 0,
       droppedFrames: 0,
     });
   }, [clearTimers]);
@@ -92,6 +98,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
       phase: 'requesting-camera',
       delegate: null,
       error: null,
+      inferenceFps: 0,
       droppedFrames: 0,
     });
 
@@ -105,11 +112,13 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
 
+      const wasmRoot = assetUrl('mediapipe/wasm/');
+      const modelUrl = assetUrl('mediapipe/models/hand_landmarker.task');
+
       const bootWorker = (delegate: 'GPU' | 'CPU') => {
         workerRef.current?.terminate();
         readyRef.current = false;
         busyRef.current = false;
-        delegateRef.current = delegate;
         handRuntime.getState().setState({
           initializing: true,
           phase: delegate === 'GPU' ? 'initializing' : 'recovering',
@@ -150,11 +159,18 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
             }));
             const tracked = identityTrackerRef.current.update(detections);
             const hands = tracked.map((hand, index) => gestureEngineRef.current.analyze(hand, index));
+            const now = performance.now();
+            if (lastResultAtRef.current != null) {
+              const instantFps = 1000 / Math.max(now - lastResultAtRef.current, 1);
+              inferenceFpsRef.current = inferenceFpsRef.current ? inferenceFpsRef.current * 0.72 + instantFps * 0.28 : instantFps;
+            }
+            lastResultAtRef.current = now;
             handRuntime.getState().setState({
               tracking: hands.length > 0,
               phase: hands.length > 0 ? 'tracking' : 'ready',
               hands,
               inferenceTime: data.inferenceTime ?? 0,
+              inferenceFps: inferenceFpsRef.current,
               error: null,
             });
             return;
@@ -187,7 +203,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
           else handRuntime.getState().setState({ initializing: false, phase: 'error', error: event.message || 'Hand tracking worker crashed.' });
         };
 
-        worker.postMessage({ type: 'INIT', delegate });
+        worker.postMessage({ type: 'INIT', delegate, wasmRoot, modelUrl });
       };
 
       bootWorker('GPU');

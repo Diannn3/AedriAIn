@@ -1,11 +1,17 @@
 # Third-party research and licensing notes
 
-Prototype 01 was written as fresh implementation code. Public repositories were inspected for architectural and interaction ideas.
+AedriAIn's core implementation is written as fresh project code. Reference projects are inspected for architecture, API usage, and interaction ideas.
 
-- `quiet-node/gesture-lab` — MIT licensed.
-- `SAGAR-TAMANG/ultron-by-sagar-builds` — MIT licensed.
-- `google-ai-edge/mediapipe-samples-web` — Apache-2.0 licensed.
-- `Necookie-Labs/Voxel-Manipulation-via-Hand-Tracking` — MIT licensed.
-- `heeelol/jester` — no `LICENSE` file was found during the inspection, so this project deliberately treats JESTER as a behavioral/architectural reference only and does not vendor or copy its source.
+Known research licenses checked during development:
 
-Before vendoring code or assets from any reference repository, re-check its current license and preserve required notices.
+- `google-ai-edge/mediapipe-samples-web` — Apache-2.0
+- `quiet-node/gesture-lab` — MIT
+- `SAGAR-TAMANG/ultron-by-sagar-builds` — MIT
+- PMNDRS React Three Fiber / Drei / UIKit — MIT
+- Three.js — MIT
+- Vitest — MIT
+- Playwright — Apache-2.0
+
+`heeelol/jester` did not expose a repository license during inspection, so AedriAIn deliberately treats it as a behavioral/architectural reference and does not vendor its source.
+
+Before copying any code/assets from another repository, re-check that repository's current license and preserve required copyright/license notices.

@@ -1,48 +1,45 @@
-# Core V2 implementation report
+# Core V2.1 implementation report
 
-## Implemented in this pass
+## Recovered from Core V2 branch omission
 
-- Three.js raycast-based hand target selection
-- Camera-facing ray/plane world-space dragging
-- Two-hand translation + relative scale + rotation
-- Mouse dragging moved to the same camera/plane math
-- Removed DOM rectangle hit-testing path
-- Stable temporal hand IDs across detector reordering
-- Worker lifecycle phases and dropped-frame telemetry
-- GPU initialization with CPU fallback and timeout handling
-- MediaPipe model pinned from `latest` to `float16/1`
-- Focus invariants fixed so closed windows cannot remain focused
-- Persisted workspace schema bumped to v2 with migration
-- Generic Maps scope (no UPLB dependency in core)
-- App implementations split under `src/apps/`
-- Typed app capability names introduced
-- File rows can open user-selected files through the existing restricted bridge
-- Calendar demo generated from the current week instead of a hardcoded date
-- Vite relative production base for desktop packaging
-- Electron production custom protocol (`aedriain://app`)
-- Electron IPC sender validation and permission-check handler
+The pushed Core V2 commit referenced new app/interaction/identity/workspace modules that were absent from the Git tree. Core V2.1 restores the intended modules and then hardens them rather than restoring the original bundle unchanged.
 
-## Verified locally without external dependencies
+## Implemented
 
-- `scripts/test-core.sh` passes
-  - gesture classification
-  - pinch normalization/hysteresis
-  - stable hand identity across detector order swaps
-  - local command parsing
-- Electron main/preload pass `node --check`
-- `git diff --check` passes
+- restored app registry + six app modules
+- restored camera runtime, target registry, interaction runtime, hand controller, pointer beam
+- restored workspace layouts and stable hand identity tracker
+- fixed pointer beam world endpoint bug
+- stable active-hand ownership across MediaPipe reorderings
+- transform -> one-hand-grab continuity when one hand releases
+- motion-predicted/global hand identity assignment
+- explicit window world dimensions
+- canvas-relative mouse ray coordinates
+- resource IDs on windows
+- multi-resource Notes records and per-note windows
+- singleton enforcement for non-Notes apps
+- window transform bounds and focus/maximize invariants
+- opaque Electron file IDs instead of renderer-visible paths
+- bounded read-by-token file IPC for future PDF rendering
+- render FPS/DPR + MediaPipe inference FPS/latency instrumentation
+- origin-aware Electron media permission handling
+- self-contained CSP for current core functionality
+- local MediaPipe asset staging + production asset verification
+- model-buffer initialization in the worker
+- Vitest unit tests and fixture-backed identity tests
+- Playwright browser E2E
+- production Electron smoke harness
+- GitHub Actions validation workflow
+- Node/npm/toolchain versions pinned at the top level
 
-## Environment limitation
+## Verified locally in this environment
 
-This execution environment cannot resolve GitHub/npm hosts, and the repository does not include `node_modules` or a lockfile. The full React/R3F/Vite typecheck and runtime launch therefore still require a networked development runner.
+See `docs/VALIDATION.md`. Full npm/Vite/runtime validation remains blocked by shell network resolution, not by a known source-code failure.
 
-## Required first runtime checks
+## Known blocked item
 
-1. `npm install`
-2. `npm run typecheck`
-3. `npm run build`
-4. `npm run dev` and verify camera GPU path + CPU fallback
-5. Verify one-hand world-space dragging at multiple viewport sizes
-6. Verify two-hand translate/scale/rotate with hand order changes
-7. Verify production `npm run desktop` resolves all assets through `aedriain://app`
-8. Profile render FPS, inference latency, dropped frames, and memory
+`package-lock.json` cannot be truthfully generated offline because npm has no cached `@mediapipe/tasks-vision` metadata. Generate it with the first networked `npm install` and commit it before treating dependency resolution as reproducible.
+
+## Next branch after validation
+
+Files + Spatial PDF Workspace.

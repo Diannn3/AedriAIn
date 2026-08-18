@@ -11,6 +11,7 @@ export interface HandRuntimeState {
   delegate: 'GPU' | 'CPU' | null;
   error: string | null;
   inferenceTime: number;
+  inferenceFps: number;
   droppedFrames: number;
   hands: HandInteractionSnapshot[];
   setState: (patch: Partial<Omit<HandRuntimeState, 'setState'>>) => void;
@@ -24,6 +25,7 @@ export const handRuntime = createStore<HandRuntimeState>((set) => ({
   delegate: null,
   error: null,
   inferenceTime: 0,
+  inferenceFps: 0,
   droppedFrames: 0,
   hands: [],
   setState: (patch) => set(patch),

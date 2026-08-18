@@ -5,6 +5,7 @@ import { useDesktopStore } from '../store/useDesktopStore';
 import { AssistantOrb } from './AssistantOrb';
 import { HandInteractionController } from './HandInteractionController';
 import { SpatialWindow } from './SpatialWindow';
+import { PerformanceProbe } from './PerformanceProbe';
 import { SpatialPointerBeam } from './SpatialPointerBeam';
 
 function AmbientScene() {
@@ -45,6 +46,7 @@ function DesktopObjects() {
       <AssistantOrb />
       <HandInteractionController />
       <SpatialPointerBeam />
+      <PerformanceProbe />
     </>
   );
 }

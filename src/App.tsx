@@ -20,7 +20,7 @@ function DesktopShell() {
   return (
     <main className="desktop-shell">
       <SpatialScene />
-      <div className="brand-lockup"><span className="brand-glyph">A</span><div><b>AEDRIAIN</b><small>WEBCAM SPATIAL DESKTOP · CORE V2</small></div></div>
+      <div className="brand-lockup"><span className="brand-glyph">A</span><div><b>AEDRIAIN</b><small>WEBCAM SPATIAL DESKTOP · CORE V2.1</small></div></div>
       <StatusHUD />
       <AppDock />
       <CommandBar />

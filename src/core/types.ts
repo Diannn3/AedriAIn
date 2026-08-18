@@ -10,13 +10,24 @@ export interface SpatialWindowTransform {
 export interface SpatialWindowModel extends SpatialWindowTransform {
   id: string;
   appId: AppId;
+  resourceId?: string;
   title: string;
+  width: number;
+  height: number;
   open: boolean;
   focused: boolean;
   minimized: boolean;
   maximized: boolean;
   zOrder: number;
   restoreTransform?: SpatialWindowTransform;
+}
+
+export interface NoteRecord {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface TaskItem {
@@ -27,9 +38,21 @@ export interface TaskItem {
   priority: 'low' | 'medium' | 'high';
 }
 
+export interface FileDescriptor {
+  id: string;
+  name: string;
+  size: number;
+  mimeType?: string;
+}
+
+export type FileReadResult =
+  | { ok: true; file: FileDescriptor; data: Uint8Array }
+  | { ok: false; error: string };
+
 export interface DesktopBridge {
-  pickFiles(): Promise<Array<{ name: string; path: string; size: number }>>;
-  openPath(path: string): Promise<{ ok: boolean; error?: string }>;
+  pickFiles(): Promise<FileDescriptor[]>;
+  openFile(fileId: string): Promise<{ ok: boolean; error?: string }>;
+  readFile(fileId: string): Promise<FileReadResult>;
   platform(): Promise<string>;
 }
 

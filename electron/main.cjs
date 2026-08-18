@@ -1,11 +1,14 @@
 const { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } = require('electron');
 const path = require('node:path');
+const { readFile, stat } = require('node:fs/promises');
+const { randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 
 const devUrl = process.env.VITE_DEV_SERVER_URL;
 const appOrigin = 'aedriain://app';
 const distRoot = path.resolve(__dirname, '..', 'dist');
-const userApprovedPaths = new Set();
+const userApprovedFiles = new Map();
+const MAX_RENDERER_FILE_BYTES = 64 * 1024 * 1024;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -20,7 +23,22 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+
+function mimeTypeFor(filePath) {
+  switch (path.extname(filePath).toLowerCase()) {
+    case '.pdf': return 'application/pdf';
+    case '.png': return 'image/png';
+    case '.jpg': case '.jpeg': return 'image/jpeg';
+    case '.webp': return 'image/webp';
+    case '.gif': return 'image/gif';
+    case '.txt': case '.md': return 'text/plain';
+    case '.json': return 'application/json';
+    default: return 'application/octet-stream';
+  }
+}
+
 function isTrustedUrl(rawUrl) {
+  if (!rawUrl) return false;
   try {
     const parsed = new URL(rawUrl);
     if (devUrl) {
@@ -88,31 +106,59 @@ function createWindow() {
 app.whenReady().then(() => {
   if (!devUrl) registerAppProtocol();
 
-  const isTrustedPermissionRequest = (webContents, permission) => isTrustedUrl(webContents.getURL()) && permission === 'media';
-
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    callback(isTrustedPermissionRequest(webContents, permission));
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details = {}) => {
+    const origin = details.securityOrigin || details.requestingUrl || webContents.getURL();
+    const requestedMedia = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+    const videoOnly = requestedMedia.length === 0 || requestedMedia.every((mediaType) => mediaType === 'video');
+    callback(Boolean(permission === 'media' && isTrustedUrl(origin) && details.isMainFrame !== false && videoOnly));
   });
 
-  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-    return Boolean(webContents && isTrustedPermissionRequest(webContents, permission));
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details = {}) => {
+    const origin = details.securityOrigin || requestingOrigin || webContents?.getURL();
+    const videoOnly = details.mediaType == null || details.mediaType === 'video' || details.mediaType === 'unknown';
+    return Boolean(permission === 'media' && isTrustedUrl(origin) && videoOnly);
   });
 
   ipcMain.handle('files:pick', async (event) => {
     assertTrustedSender(event);
     const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });
     if (result.canceled) return [];
-    result.filePaths.forEach((filePath) => userApprovedPaths.add(path.resolve(filePath)));
-    return result.filePaths.map((filePath) => ({ name: path.basename(filePath), path: filePath, size: 0 }));
+
+    const descriptors = [];
+    for (const filePath of result.filePaths) {
+      const resolved = path.resolve(filePath);
+      const id = randomUUID();
+      let size = 0;
+      try { size = (await stat(resolved)).size; } catch { /* Metadata is optional. */ }
+      const descriptor = { id, name: path.basename(resolved), size, mimeType: mimeTypeFor(resolved) };
+      userApprovedFiles.set(id, { path: resolved, descriptor });
+      descriptors.push(descriptor);
+    }
+    return descriptors;
   });
 
-  ipcMain.handle('files:open', async (event, filePath) => {
+  ipcMain.handle('files:open', async (event, fileId) => {
     assertTrustedSender(event);
-    if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) return { ok: false, error: 'Invalid path' };
-    const resolved = path.resolve(filePath);
-    if (!userApprovedPaths.has(resolved)) return { ok: false, error: 'Path was not user-approved' };
-    const error = await shell.openPath(resolved);
+    if (typeof fileId !== 'string') return { ok: false, error: 'Invalid file identifier' };
+    const approved = userApprovedFiles.get(fileId);
+    if (!approved) return { ok: false, error: 'File access expired or was not user-approved' };
+    const error = await shell.openPath(approved.path);
     return error ? { ok: false, error } : { ok: true };
+  });
+
+  ipcMain.handle('files:read', async (event, fileId) => {
+    assertTrustedSender(event);
+    if (typeof fileId !== 'string') return { ok: false, error: 'Invalid file identifier' };
+    const approved = userApprovedFiles.get(fileId);
+    if (!approved) return { ok: false, error: 'File access expired or was not user-approved' };
+    try {
+      const fileStat = await stat(approved.path);
+      if (fileStat.size > MAX_RENDERER_FILE_BYTES) return { ok: false, error: 'File is too large to load into the spatial viewer.' };
+      const buffer = await readFile(approved.path);
+      return { ok: true, file: { ...approved.descriptor, size: fileStat.size }, data: new Uint8Array(buffer) };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Could not read file.' };
+    }
   });
 
   ipcMain.handle('system:platform', (event) => {

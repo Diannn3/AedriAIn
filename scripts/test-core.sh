@@ -65,3 +65,15 @@ assert.equal(parseLocalCommand('make me coffee'), null);
 console.log('command-parser: PASS');
 TEST
 node "$OUT/commands/test.cjs"
+
+
+tsc src/input/hand/types.ts src/spatial/handSelection.ts --rootDir src --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/selection" --strict --skipLibCheck
+cat > "$OUT/selection/test.cjs" <<'TEST'
+const assert = require('node:assert/strict');
+const { choosePrimaryHand } = require('./spatial/handSelection.js');
+const hand = (id, handedness, gesture, pinching=false, score=.9) => ({ id, handedness, gesture, pinching, score, pointer:{x:.5,y:.5}, pinchPoint:{x:.5,y:.5}, pinchStrength:1 });
+assert.equal(choosePrimaryHand([hand('left','Left','POINT'),hand('right','Right','IDLE')], 'right').id, 'right');
+assert.equal(choosePrimaryHand([hand('point','Left','POINT'),hand('pinch','Right','PINCH',true)]).id, 'pinch');
+console.log('hand-selection: PASS');
+TEST
+node "$OUT/selection/test.cjs"
