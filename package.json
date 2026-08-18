@@ -1,8 +1,8 @@
 {
   "name": "aedriain",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
-  "description": "Webcam-controlled holographic spatial desktop for files, schedules, maps, tasks, notes, and AI.",
+  "description": "Webcam-controlled holographic spatial desktop for files, documents, schedules, maps, tasks, notes, settings, and AI.",
   "type": "module",
   "main": "electron/main.cjs",
   "packageManager": "npm@10.9.2",
@@ -23,7 +23,9 @@
     "verify:assets": "node scripts/verify-mediapipe-assets.mjs && node scripts/verify-pdfjs-assets.mjs",
     "assets:pdfjs": "node scripts/vendor-pdfjs.mjs",
     "verify:pdfjs": "node scripts/verify-pdfjs-assets.mjs",
-    "test:file-resource": "node scripts/test-file-resource.cjs"
+    "test:file-resource": "node scripts/test-file-resource.cjs",
+    "verify:lockfile": "node scripts/verify-lockfile.mjs",
+    "docs:filelist": "node scripts/generate-filelist.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.35",

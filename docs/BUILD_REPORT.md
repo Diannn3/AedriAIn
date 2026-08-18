@@ -1,143 +1,164 @@
-# Documents V1 implementation report
+# Documents V1.1 + Calibration Foundation implementation report
 
 ## Baseline
 
-Source baseline: pushed `core-v2.1` branch at commit `59b360f7643133a6722dc4a13fde8555491ea9a6`.
+Remote source baseline: `documents-v1` at commit `6a8aab922dcd73b5e09edc0e1e8465ced723a958`.
 
-A literal `git clone` could not be completed inside this execution environment because shell DNS cannot resolve GitHub. The previously generated Core V2.1 bundle was therefore extracted locally and verified against the pushed branch's 70-file manifest and representative Git blob hashes before edits began.
+A literal shell clone was attempted first and failed because this execution environment cannot resolve `github.com`. The previously generated Documents V1 bundle was used as the local source tree, its 98-file project manifest was checked against the pushed branch, and GitHub was treated as source-of-truth for branch metadata. The pushed branch additionally contained a stale `package-lock.json`; it was audited separately and found not to match the V1 package manifest.
 
 ## Pre-edit audit
 
-Before modifying code:
+Before V1.1 edits:
 
-- all 70 tracked paths were enumerated
-- the complete ~3.4k-line source/config/doc tree was inspected programmatically
-- critical runtime/security/interaction files were reviewed manually
-- every relative import resolved
-- no TODO/FIXME/HACK markers were present
-- bootstrap gesture/parser/hand-selection regressions passed
-- Electron/runtime utility scripts parsed
+- every project/source path from the 98-file Documents V1 manifest was read
+- PDF fixtures were treated as binary
+- critical PDF/Dexie/Electron/hand/window flows were reviewed manually
+- baseline dependency-light regressions passed
+- the pushed lockfile/CI mismatch was identified before feature work
+- current upstream PDF.js, Media Capture, Dexie/virtualization, and GitHub Actions behavior was rechecked where it affected implementation decisions
 
-## Implemented — Core V2.2 app/window contract
+## Reliability work
 
-- per-app default/min/max geometry
-- true layout width/height separate from spatial scale
-- bottom-right resize with opposite-corner anchoring for rotated/scaled windows
-- app registry converted to lazy dynamic imports
-- per-window error isolation
-- separate Three.js `chrome` and `content` spatial targets
-- depth-aware + z-order-aware ray selection
-- chrome pinch moves window; content pinch never starts a one-hand drag
-- conservative hand activation/focus bridge for normal DOM controls
-- Research workspace added
-- Research mode opens Files if no document exists yet
+- package version advanced to `0.3.1`
+- added strict `scripts/verify-lockfile.mjs`
+- CI now triggers on every push, pull request, and manual dispatch
+- first CI job verifies or legitimately regenerates a stale/missing lockfile on a networked runner
+- one exact lockfile artifact is reused by every downstream `npm ci` job
+- added non-blocking high-severity production dependency audit
+- added lockfile recovery documentation
+- generated-test output added to `.gitignore`
 
-## Implemented — durable resource storage
+A correct lockfile is intentionally **not fabricated locally** because this shell still cannot reach npm. The first networked CI/local run must generate the real npm resolution.
 
-- Dexie database introduced
-- durable Notes, Tasks, Documents, browser Blobs, Settings, GestureProfiles tables
-- Notes and Tasks removed from Zustand persistence
-- legacy V2.1 Notes/Tasks migration to Dexie
-- migration runs before dynamic import of `App`/Zustand store
-- independent Note resources/windows retained
-- browser PDF Blobs persist through reload
-- deterministic fake-IndexedDB tests added for resources/migration
-- workspace tests added for Research fallback/focus
+## Documents V1.1 lifecycle
 
-## Implemented — secure file resource service
+- DocumentRecords now carry source fingerprints
+- desktop picker descriptors include modification time when available
+- relinking reuses the same durable document instead of duplicating it
+- relinking an obviously different fingerprint warns the user
+- source changes invalidate cached page text; same fingerprints preserve it
+- recent documents expose Open / Relink / Remove
+- removing from AedriAIn never deletes the original OS file
+- remove closes attached windows, clears page index, cleans browser Blob, and revokes Electron token when possible
+- startup garbage collection removes orphan browser PDF Blobs
+- source resolution distinguishes ready / missing / needs-relink
 
-- opaque picker token remains the only renderer file identity
-- real paths remain in Electron main
-- bounded approved-file registry
-- session resource URL `aedriain://app/_resource/file/<token>`
-- streamed GET/HEAD
-- single byte-range parsing and 206 responses
-- 416 invalid ranges
-- dev-mode Range CORS/preflight/exposed headers
-- MIME + nosniff + no-store response metadata
-- token revocation capability
-- bounded direct-read IPC retained for small non-PDF workflows
+## Cached document search
 
-## Implemented — Files/Documents V1
+Dexie schema v2 adds `documentPages` keyed by document/page.
 
-- Files distinguishes PDFs from externally-opened formats
-- browser and Electron files become durable `DocumentRecord`s
-- PDF files spawn independent `document` windows
-- Documents hidden from dock; they are resource-created apps
-- Recent Documents list backed by Dexie
-- multiple PDF windows supported
-- browser-selected PDFs persist as IndexedDB Blobs
-- source lifecycle distinguishes missing metadata vs loading vs expired Electron token
-- custom PDF.js display-layer viewer added
-- locally staged PDF.js worker/CMap/font/WASM/ICC assets
-- page navigation
-- zoom +/-
-- fit width / fit page
-- rotation
-- lazy thumbnails
-- selectable PDF.js TextLayer
-- document-wide asynchronous search
-- search-result page navigation
-- persisted current page/zoom/rotation
-- external-open fallback
-- PDF render cancellation/cleanup
-- search highlighting separated from expensive canvas/text-layer rendering
+- PDF indexing runs in bounded concurrency
+- cached pages are reused on reopen
+- indexing is abortable when a document closes
+- progress is visible in the viewer
+- search reads cached page text instead of re-extracting every PDF page per query
+- search normalizes Unicode/whitespace
+- whitespace-insensitive fallback handles PDF text fragments split inside words
 
-## Implemented — validation expansion
+## Continuous virtualized reader
 
-- bootstrap command test now covers Research mode
-- storage resource tests
-- storage migration tests
-- workspace contract tests
-- Playwright two-PDF open/persistence scenario
-- Playwright PDF search scenario
-- Research workspace before/after-document scenarios
-- layout resize E2E
-- PDF fixture files
-- PDF.js asset staging/verification scripts
-- CI stages both MediaPipe and PDF.js local runtime assets
-- `fake-indexeddb` added as test-only dependency
+Added an internal dependency-free virtual list primitive because the baseline lockfile was already invalid and this environment cannot safely introduce another unresolved package.
 
-## Verified locally without dependency registry access
+Features:
 
-- bootstrap gesture engine: PASS
-- command parser including Research mode: PASS
-- hand selection: PASS
-- Electron main/preload syntax: PASS
-- file resource Range/MIME regression: PASS
-- runtime/vendor script syntax: PASS
-- TypeScript parser pass across the expanded TS/TSX tree: PASS
-- all relative imports resolve: PASS
-- CSS parses through PostCSS: PASS
-- `git diff --check`: PASS (rerun at final freeze)
+- variable measured row heights
+- overscan
+- ResizeObserver measurement
+- binary-search visible-range lookup
+- programmatic scroll-to-index
+- reset/invalidation after zoom/rotation
 
-## Network/runtime limitation
+The primitive powers:
 
-This shell environment still cannot resolve npm/GitHub hosts. A real `npm install --package-lock-only` attempt hung on registry resolution and was terminated. Therefore this session cannot truthfully claim:
+- thumbnail rail virtualization
+- continuous PDF page virtualization
 
-- generated `package-lock.json`
-- dependency-aware TypeScript typecheck
-- actual Vitest execution with Dexie/fake-indexeddb
-- Vite production build
-- PDF.js asset staging from installed package
-- Playwright browser runtime
-- production Electron launch
-- webcam GPU/CPU interaction tests
+The reader now supports SINGLE and SCROLL modes, tracks the active continuous page, keeps thumbnails synchronized, and persists the reading mode.
 
-The code and CI intentionally fail loudly when runtime assets are not staged rather than silently falling back to CDNs.
+An 80-page deterministic PDF fixture plus Playwright assertions guard against mounting one page tree per PDF page.
 
-## Exit criteria for merging Documents V1
+## PDF error/recovery behavior
 
-On the first networked runner:
+- password-required UI through PDF.js `onPassword`
+- incorrect-password retry state
+- corrupt/load failure state with external-open/remove actions
+- expired/missing source guidance
+- Electron process-restart source reauthorization through Files relink
 
-```bash
-npm install
-npm run setup
-npm run typecheck
-npm run test
-npm run build
-npm run test:e2e
-xvfb-run -a npm run test:electron  # Linux CI
-```
+## Settings and calibration
 
-Then commit the generated `package-lock.json`, switch CI installation to `npm ci` only, and complete the manual webcam/performance matrix in `docs/VALIDATION.md`.
+Added a real Settings app and durable settings/profile runtime:
+
+- active gesture profiles
+- create custom profile
+- preferred hand: automatic / left / right
+- pointer smoothing
+- drag smoothing
+- pointer sensitivity
+- UI scale
+- reduced motion
+- tracker status
+- two-sample pinch calibration
+
+Calibration samples normalized thumb/index distances, derives hysteresis thresholds, and persists only clamped safe values.
+
+Gesture profiles update the running GestureEngine live. Preferred-hand policy also seeds simultaneous two-hand transform ownership unless an existing capture already owns the gesture.
+
+## Camera lifecycle hardening
+
+Added explicit phases for permission denial, unavailable devices, device loss, and tracker error.
+
+When a camera track ends or final CPU tracker initialization fails:
+
+- stale hands are cleared
+- worker is terminated
+- stream is stopped/cleared
+- smoothing/identity state is reset
+- UI returns to an explicit re-enable state
+
+## Accessibility foundation
+
+- UI text scale setting (bounded 90–130%)
+- reduced-motion setting
+- explicit accessible labels for calibration/profile controls
+- existing mouse/keyboard precision path preserved
+
+This is not yet the final accessibility pass; tiny legacy HUD typography and comprehensive keyboard/focus QA remain future work.
+
+## Validation added
+
+Vitest contracts now cover:
+
+- document relink without duplication
+- source-change index invalidation
+- same-fingerprint index preservation
+- document removal
+- browser Blob GC
+- gesture-profile clamping
+- Documents V1 → V1.1 database migration defaults
+- cached page search including split-span fallback
+- preferred-hand behavior
+
+Playwright contracts now cover:
+
+- Settings persistence
+- two PDF windows/reload
+- indexed PDF search
+- Research workspace
+- layout resize
+- long-document continuous virtualization
+- browser document removal
+- browser PDF relink preserving one resource/window
+- performance snapshot artifact
+
+## Local validation boundary
+
+Dependency-light tests and source-level parser/import/security checks can run here. Full dependency-aware TypeScript/Vitest/Vite/Playwright/Electron execution cannot be claimed until a networked runner regenerates the lockfile and installs the exact dependency graph.
+
+See `docs/VALIDATION.md` for the final matrix and `docs/PERFORMANCE_BASELINE.md` for benchmark gates.
+
+## Final dependency-light freeze
+
+At final freeze the implementation contains 110 project files. The local matrix passes the GestureEngine, command parser, hand-selection, virtual-range, and file-resource bootstrap regressions; all 68 TS/TSX files parse; 79 source/script files have resolving relative imports; all bare third-party imports are declared; CSS/CI YAML/JSON parse; all three PDF fixtures pass header/EOF sanity checks; and `docs/FILELIST.txt` matches the tree exactly.
+
+The only intentional local gate failure is `scripts/verify-lockfile.mjs`, because no legitimate V1.1 lockfile can be generated without npm network access. The networked CI lockfile job is responsible for that resolution before downstream `npm ci` validation.

@@ -1,4 +1,4 @@
-export type AppId = 'notes' | 'tasks' | 'calendar' | 'map' | 'files' | 'document' | 'assistant';
+export type AppId = 'notes' | 'tasks' | 'calendar' | 'map' | 'files' | 'document' | 'assistant' | 'settings';
 export type Vec3Tuple = [number, number, number];
 
 export interface SpatialWindowTransform {
@@ -55,6 +55,14 @@ export interface TaskRecord {
 }
 
 export type DocumentSourceKind = 'electron' | 'browser';
+export type DocumentViewMode = 'single' | 'continuous';
+
+export interface DocumentSourceFingerprint {
+  name: string;
+  size: number;
+  mimeType: string;
+  modifiedAt?: number;
+}
 
 export interface DocumentRecord {
   id: string;
@@ -63,10 +71,20 @@ export interface DocumentRecord {
   size: number;
   sourceKind: DocumentSourceKind;
   sourceId: string;
+  sourceFingerprint: DocumentSourceFingerprint;
   lastOpenedAt: number;
   currentPage: number;
   zoom: number;
   rotation: number;
+  viewMode?: DocumentViewMode;
+}
+
+export interface DocumentPageRecord {
+  documentId: string;
+  pageNumber: number;
+  text: string;
+  normalizedText: string;
+  indexedAt: number;
 }
 
 export interface BrowserBlobRecord {
@@ -96,6 +114,7 @@ export interface FileDescriptor {
   name: string;
   size: number;
   mimeType?: string;
+  modifiedAt?: number;
 }
 
 export type FileReadResult =

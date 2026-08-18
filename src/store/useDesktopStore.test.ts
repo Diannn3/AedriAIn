@@ -28,4 +28,12 @@ describe('workspace contracts', () => {
     expect(documentWindow?.focused).toBe(true);
     expect(files?.open).toBe(false);
   });
+
+  it('removes every window attached to a deleted resource', () => {
+    useDesktopStore.getState().spawnWindow('document', 'One.pdf', 'resource-one');
+    useDesktopStore.getState().spawnWindow('document', 'One duplicate.pdf', 'resource-one');
+    expect(useDesktopStore.getState().windows.filter((windowModel) => windowModel.resourceId === 'resource-one')).toHaveLength(2);
+    useDesktopStore.getState().removeWindowsForResource('resource-one');
+    expect(useDesktopStore.getState().windows.some((windowModel) => windowModel.resourceId === 'resource-one')).toBe(false);
+  });
 });

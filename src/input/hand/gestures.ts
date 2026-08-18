@@ -16,12 +16,16 @@ export interface GestureConfig {
   pinchOn: number;
   pinchOff: number;
   pointerSmoothing: number;
+  dragSmoothing: number;
+  sensitivity: number;
 }
 
 export const DEFAULT_GESTURE_CONFIG: GestureConfig = {
   pinchOn: 0.31,
   pinchOff: 0.46,
   pointerSmoothing: 0.42,
+  dragSmoothing: 0.42,
+  sensitivity: 1,
 };
 
 const distance2D = (a: Landmark, b: Landmark) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -47,6 +51,7 @@ export const classifyPose = (lm: Landmark[], pinching: boolean): GestureLabel =>
 export class GestureEngine {
   private pinchState = new Map<string, boolean>();
   private smoothedPointers = new Map<string, { x: number; y: number }>();
+  private smoothedPinchPoints = new Map<string, { x: number; y: number }>();
   private config: GestureConfig;
 
   constructor(config: Partial<GestureConfig> = {}) {
@@ -64,7 +69,12 @@ export class GestureEngine {
     const pinching = wasPinching ? strength < this.config.pinchOff : strength < this.config.pinchOn;
     this.pinchState.set(id, pinching);
 
-    const rawPointer = getPointerPoint(hand.landmarks);
+    const sensitivity = Math.max(0.55, Math.min(1.8, this.config.sensitivity));
+    const applySensitivity = (point: { x: number; y: number }) => ({
+      x: Math.max(0, Math.min(1, 0.5 + (point.x - 0.5) * sensitivity)),
+      y: Math.max(0, Math.min(1, 0.5 + (point.y - 0.5) * sensitivity)),
+    });
+    const rawPointer = applySensitivity(getPointerPoint(hand.landmarks));
     const previous = this.smoothedPointers.get(id) ?? rawPointer;
     const smoothing = Math.max(0.01, Math.min(1, this.config.pointerSmoothing));
     const pointer = {
@@ -73,11 +83,20 @@ export class GestureEngine {
     };
     this.smoothedPointers.set(id, pointer);
 
+    const rawPinchPoint = applySensitivity(getPinchPoint(hand.landmarks));
+    const previousPinchPoint = this.smoothedPinchPoints.get(id) ?? rawPinchPoint;
+    const dragSmoothing = Math.max(0.01, Math.min(1, this.config.dragSmoothing));
+    const pinchPoint = {
+      x: previousPinchPoint.x + (rawPinchPoint.x - previousPinchPoint.x) * dragSmoothing,
+      y: previousPinchPoint.y + (rawPinchPoint.y - previousPinchPoint.y) * dragSmoothing,
+    };
+    this.smoothedPinchPoints.set(id, pinchPoint);
+
     return {
       id,
       handedness: hand.handedness,
       pointer,
-      pinchPoint: getPinchPoint(hand.landmarks),
+      pinchPoint,
       pinchStrength: strength,
       pinching,
       gesture: classifyPose(hand.landmarks, pinching),
@@ -88,5 +107,6 @@ export class GestureEngine {
   reset() {
     this.pinchState.clear();
     this.smoothedPointers.clear();
+    this.smoothedPinchPoints.clear();
   }
 }

@@ -33,6 +33,7 @@ export const workspaceLayouts: Record<WorkspaceId, WorkspaceLayout> = {
       { appId: 'files', open: false },
       { appId: 'document', open: false, primaryOnly: false },
       { appId: 'assistant', open: false },
+      { appId: 'settings', open: false },
     ],
   },
   planning: {
@@ -47,6 +48,7 @@ export const workspaceLayouts: Record<WorkspaceId, WorkspaceLayout> = {
       { appId: 'files', open: false },
       { appId: 'document', open: false, primaryOnly: false },
       { appId: 'assistant', open: false },
+      { appId: 'settings', open: false },
     ],
   },
   research: {
@@ -61,6 +63,7 @@ export const workspaceLayouts: Record<WorkspaceId, WorkspaceLayout> = {
       { appId: 'map', open: false },
       { appId: 'files', open: false },
       { appId: 'assistant', open: false },
+      { appId: 'settings', open: false },
     ],
   },
   minimal: {
@@ -75,6 +78,7 @@ export const workspaceLayouts: Record<WorkspaceId, WorkspaceLayout> = {
       { appId: 'map', open: false },
       { appId: 'files', open: false },
       { appId: 'document', open: false, primaryOnly: false },
+      { appId: 'settings', open: false },
     ],
   },
 };

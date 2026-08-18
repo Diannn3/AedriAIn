@@ -205,11 +205,17 @@ app.whenReady().then(() => {
     for (const filePath of result.filePaths) {
       const resolved = path.resolve(filePath);
       let size = 0;
-      try { size = (await stat(resolved)).size; } catch { /* Metadata is optional. */ }
+      let modifiedAt;
+      try {
+        const fileStat = await stat(resolved);
+        size = fileStat.size;
+        modifiedAt = fileStat.mtimeMs;
+      } catch { /* Metadata is optional. */ }
       descriptors.push(addApprovedFile(resolved, {
         name: path.basename(resolved),
         size,
         mimeType: mimeTypeFor(resolved),
+        ...(modifiedAt != null ? { modifiedAt } : {}),
       }));
     }
     return descriptors;

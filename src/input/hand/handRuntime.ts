@@ -1,7 +1,17 @@
 import { createStore } from 'zustand/vanilla';
 import type { HandInteractionSnapshot } from './types';
 
-export type HandTrackingPhase = 'idle' | 'requesting-camera' | 'initializing' | 'ready' | 'tracking' | 'recovering' | 'error';
+export type HandTrackingPhase =
+  | 'idle'
+  | 'requesting-camera'
+  | 'initializing'
+  | 'ready'
+  | 'tracking'
+  | 'recovering'
+  | 'permission-denied'
+  | 'device-unavailable'
+  | 'device-lost'
+  | 'error';
 
 export interface HandRuntimeState {
   enabled: boolean;

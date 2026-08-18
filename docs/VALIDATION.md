@@ -1,154 +1,184 @@
-# Documents V1 validation matrix
+# Documents V1.1 validation matrix
 
-## Environment
+## Environment boundary
 
-The current execution environment has Node 22 and global TypeScript/PostCSS, but shell DNS cannot resolve npm/GitHub hosts. The source baseline was therefore reconstructed from the exact Core V2.1 bundle and verified against the pushed branch manifest/blob metadata before implementation.
+The implementation environment has Node 22 plus global TypeScript and basic parsing tools, but shell DNS cannot resolve npm/GitHub hosts. A literal clone and dependency install were attempted first and failed at network resolution.
 
-## Verified here without installed project dependencies
+The working source was reconstructed from the exact Documents V1 bundle produced in the previous milestone and reconciled against the pushed `documents-v1` branch. The pushed branch additionally contained a stale `package-lock.json`, which was audited separately and found not to match the current package manifest.
 
-- all original 70 Core V2.1 paths audited before edits
-- dependency-light GestureEngine regression: PASS
-- stable hand identity bootstrap regression: PASS
-- command parser including Research mode: PASS
-- primary-hand selection bootstrap regression: PASS
-- pure Electron file-resource Range/MIME regression: PASS
-- Electron main/preload `node --check`: PASS
-- MediaPipe vendor/verify scripts parse: PASS
-- PDF.js vendor/verify scripts parse: PASS
-- Electron smoke script parses: PASS
-- expanded TS/TSX tree parses with the TypeScript compiler API: PASS
-- relative source imports resolve: PASS
-- `src/styles.css` parses through PostCSS: PASS
-- `git diff --check`: required again at final freeze
+## Dependency-light validation available here
 
-## Added dependency-aware tests (must run on first networked runner)
+Run before every freeze:
 
-### Vitest
-
-- gesture hysteresis/classification
-- stable hand identity
-- local commands
-- Notes resource independence
-- Task creation/toggle
-- browser PDF Blob/document view-state persistence
-- V2.1 Notes/Tasks -> Dexie migration
-- migration idempotence
-- Research workspace Files fallback
-- Research workspace document focus
-
-Vitest uses `fake-indexeddb/auto` plus an in-memory localStorage shim for Node-side resource tests.
-
-### Playwright browser E2E
-
-- AedriAIn boot + Files app
-- independent Notes window creation
-- Note persistence across reload
-- select/open **two** PDFs as independent document windows
-- both browser PDFs survive page reload through IndexedDB Blobs
-- PDF search finds the fixture target on page 2
-- Research mode before a document -> Files visible
-- Research mode with a document -> Document + Notes + Tasks, Files hidden
-- layout resize changes width/height independently of spatial scale
-
-### Electron smoke
-
-- build/start production renderer under custom `aedriain://app` protocol
-- verifies root window loads instead of failing on custom-protocol asset resolution
-
-## Network-blocked here
-
-A real `npm install --package-lock-only` attempt timed out on registry resolution. Because `node_modules` is absent, this environment cannot truthfully run:
-
-- lockfile generation
-- real `npm run typecheck`
-- Vitest dependency-aware suite
-- Vite build
-- runtime MediaPipe asset staging/download
-- runtime PDF.js asset staging
-- Playwright browser E2E
-- Electron launch
-
-Do **not** fabricate a lockfile. The first networked install should generate and commit it.
-
-## CI matrix
-
-`.github/workflows/ci.yml` currently performs:
-
-1. dependency installation (`npm install` until the first lockfile exists)
-2. bootstrap core tests
-3. `npm run setup` to stage MediaPipe + PDF.js assets
-4. TypeScript typecheck
-5. Vitest
-6. production Vite build
-7. Electron syntax checks
-8. Chromium Playwright E2E
-9. production Electron smoke under Xvfb
-
-After `package-lock.json` is committed, change all CI installs to `npm ci` and enable npm caching.
-
-## Manual Documents V1 matrix after CI is green
-
-### Browser
-
-- open 1, 2, and 4 PDFs
-- 10-page and 200+ page documents
-- page navigation
-- zoom/fit/rotate
-- thumbnail lazy rendering
-- text selection alignment at 100%, 150%, rotated pages
-- phrase search including text split across PDF spans
-- reload and confirm browser Blob/document/window state
-- resize PDF panel to min/default/max bounds
-
-### Electron
-
-- select PDF: renderer receives no raw path
-- HEAD/GET full response
-- byte-range request returns correct 206/Content-Range
-- invalid range returns 416
-- dev Vite origin can fetch `aedriain://` resource through configured CORS headers
-- production `aedriain://app` PDF loading is same-origin
-- token revocation rejects subsequent requests
-- process restart intentionally invalidates session tokens and produces re-select guidance
-
-### Spatial interaction
-
-- content pinch activates toolbar controls but does not drag window
-- header pinch drags
-- two-hand transform works while hands are over PDF content
-- release one hand -> continuous one-hand grab
-- detector-order swap does not swap ownership
-- resize handle maintains opposite corner on rotated/scaled windows
-- mouse/keyboard remain usable with hand tracking enabled
-
-### Webcam lifecycle
-
-- GPU path
-- automatic CPU fallback
-- camera permission rejection
-- worker initialization failure
-- temporary hand loss/reacquisition
-- hidden-tab behavior
-- unplug/end camera track (still needs explicit runtime verification/improvement)
-
-## Performance baseline to record before Notes V2/postprocessing/AI
-
-Record at minimum:
-
-```text
-scenarios:
-  no hand tracking / 1 PDF
-  GPU hand tracking / 1 PDF
-  GPU hand tracking / 2 PDFs
-  GPU hand tracking / 4 PDFs
-
-metrics:
-  R3F render FPS / frame ms
-  MediaPipe inference FPS / latency
-  dropped camera frames per minute
-  JS heap / process memory after 15 minutes
-  PDF page-change latency
-  PDF search time for 10 / 100 / 300 pages
+```bash
+npm run test:bootstrap
+node --check electron/main.cjs
+node --check electron/preload.cjs
+node --check electron/file-resource.cjs
+node --check scripts/vendor-mediapipe.mjs
+node --check scripts/vendor-pdfjs.mjs
+node --check scripts/verify-mediapipe-assets.mjs
+node --check scripts/verify-pdfjs-assets.mjs
+node --check scripts/verify-lockfile.mjs
+bash -n scripts/test-core.sh
 ```
 
-No expensive visual postprocessing should ship until these measurements establish a regression budget.
+The final freeze also performs:
+
+- TypeScript parser diagnostics over every `.ts`/`.tsx`
+- relative-import resolution audit
+- bare third-party import vs `package.json` declaration audit
+- CSS parse
+- CI YAML parse
+- JSON parse
+- file-manifest regeneration/consistency check
+- whitespace/diff checks once a Git baseline is reconstructed
+
+## Lockfile gate
+
+`package-lock.json` must match the exact package name/version/direct dependencies/devDependencies/Node engine.
+
+`node scripts/verify-lockfile.mjs` checks that contract.
+
+Because a real npm resolution cannot run in this environment, CI's first `lockfile` job is allowed to regenerate a missing/stale lockfile on a networked GitHub runner. It uploads one `aedriain-lockfile` artifact. Every downstream job downloads that same file before running `npm ci`.
+
+After the first green networked run, the generated lockfile should be committed. See `docs/LOCKFILE_RECOVERY.md`.
+
+## Vitest contracts
+
+### Hand / commands
+
+- gesture pose/hysteresis
+- calibration threshold override
+- pointer sensitivity + separate drag smoothing
+- stable hand identities
+- preferred-hand selection while preserving captured ownership
+- command parsing including Research and Settings aliases
+
+### Storage / migration
+
+- Core V2.1 Notes/Tasks migration
+- migration idempotence
+- Documents V1 → V1.1 schema defaults
+- default active gesture profile
+- independent Notes
+- durable Tasks
+- browser PDF Blob/view state
+- relink into same DocumentRecord
+- changed-source page-index invalidation
+- same-fingerprint page-index preservation
+- document removal
+- orphan Blob garbage collection
+- gesture-profile clamp bounds
+
+### Document index
+
+- Unicode/whitespace normalization
+- cached page match counts
+- whitespace-insensitive split-span phrase fallback
+
+### Workspace/window
+
+- Research before PDF → Files
+- Research with PDF → Document focus
+- deleting a resource removes all attached windows
+
+## Playwright browser contracts
+
+- shell boot + Files
+- independent Notes window
+- Note persistence across reload
+- two independent PDFs
+- PDF reader load
+- wait for cached index readiness before deterministic search
+- search fixture hit
+- both browser PDFs survive reload
+- Research fallback and document layout
+- layout resize vs spatial scale
+- Settings singleton/UI-scale persistence
+- long-PDF continuous mode mounts a bounded virtual subset
+- remove browser document closes window/recent entry
+- relink browser PDF preserves one document resource/window
+- performance snapshot attachment
+
+## Electron smoke
+
+- production build starts under `aedriain://app`
+- root renderer loads through the custom protocol
+
+Manual Electron document checks remain required:
+
+- picker exposes no raw path
+- HEAD/GET/range behavior
+- invalid range → 416
+- dev CORS Range preflight
+- production same-origin resource load
+- token revocation
+- restart → needs-relink state
+- relink reuses durable document identity
+
+## Camera/manual spatial matrix
+
+- GPU tracker path
+- GPU → CPU fallback
+- final CPU failure returns to explicit re-enable state
+- camera permission rejection
+- unavailable device
+- camera track ended/device unplugged
+- temporary hand loss/reacquisition
+- hidden-tab behavior
+- left/right preferred profile
+- one-hand chrome drag
+- app-content activation without one-hand drag
+- two-hand transform while pointer is over document content
+- release one hand → continuous grab
+- detector reorder does not swap ownership
+- resize opposite-corner anchoring on rotated/scaled windows
+- mouse/keyboard remain usable with hands enabled
+
+## Documents/manual matrix
+
+- 1 / 10 / 80 / 200+ page PDFs
+- very long PDF (1000+ pages when test data is available)
+- single / continuous modes
+- zoom / fit / rotate
+- page jump near end of long document
+- thumbnail synchronization
+- text selection at multiple zooms/rotations
+- cached search
+- phrase split across PDF spans
+- corrupt PDF
+- password PDF + incorrect password
+- browser PDF reload
+- expired desktop source relink
+- remove/reopen lifecycle
+
+## Performance gate
+
+See `docs/PERFORMANCE_BASELINE.md`.
+
+No Notes V2/AI/postprocessing milestone is considered ready until the first real browser + Electron + webcam baseline is recorded.
+
+## Final dependency-light freeze result for this implementation
+
+The final local source freeze for Documents V1.1 produced:
+
+```text
+bootstrap GestureEngine: PASS
+bootstrap command parser: PASS
+bootstrap hand-selection: PASS
+bootstrap virtual-range (1000 rows): PASS
+file-resource range/MIME: PASS
+Electron/script syntax: PASS
+TS/TSX parser: PASS · 68 files
+relative import audit: PASS · 79 source/script files
+third-party declaration audit: PASS · 16 modules
+CSS parse: PASS
+CI YAML parse: PASS
+JSON parse: PASS
+PDF fixture sanity: PASS · 3 fixtures
+FILELIST: PASS · 110 project files
+runtime milestone labels: PASS · Documents V1.1
+```
+
+`package-lock.json` is intentionally absent from this local artifact because the shell cannot perform a legitimate npm resolution. `scripts/verify-lockfile.mjs` therefore fails locally by design; the networked CI lockfile gate must produce the exact lock before dependency-aware jobs run.

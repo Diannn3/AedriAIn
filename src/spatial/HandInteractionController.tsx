@@ -7,6 +7,7 @@ import { cameraFacingPlane, fallbackPointerPoint, normalizedHandToNdc, setSpatia
 import { interactionRuntime } from './interactionRuntime';
 import { getSpatialTargets, type SpatialTarget } from './targetRegistry';
 import { choosePrimaryHand } from './handSelection';
+import { gestureProfileRuntime } from '../input/hand/gestureProfileRuntime';
 import { activateSpatialContentControl } from './domContentInteraction';
 
 interface GrabState {
@@ -91,6 +92,7 @@ export function HandInteractionController() {
     const hands = handState.hands;
     const pinching = hands.filter((hand) => hand.pinching);
     const pinchingIds = new Set(pinching.map((hand) => hand.id));
+    const preferredHand = gestureProfileRuntime.getState().profile.preferredHand;
 
     if (!hands.length) {
       grabRef.current = null;
@@ -147,7 +149,7 @@ export function HandInteractionController() {
 
     if (pinching.length >= 2) {
       const grabOwner = grabRef.current ? pinching.find((hand) => hand.id === grabRef.current?.handId) : null;
-      const a = grabOwner ?? pinching[0];
+      const a = grabOwner ?? choosePrimaryHand(pinching, null, preferredHand) ?? pinching[0];
       const b = pinching.find((hand) => hand.id !== a.id) ?? pinching[1];
       ndcA.copy(normalizedHandToNdc(a.pinchPoint.x, a.pinchPoint.y));
       ndcB.copy(normalizedHandToNdc(b.pinchPoint.x, b.pinchPoint.y));
@@ -193,7 +195,7 @@ export function HandInteractionController() {
       }
     }
 
-    const primary = choosePrimaryHand(hands, grabRef.current?.handId ?? interactionRuntime.getState().primaryHandId);
+    const primary = choosePrimaryHand(hands, grabRef.current?.handId ?? interactionRuntime.getState().primaryHandId, preferredHand);
     if (!primary) {
       previousPinchesRef.current = pinchingIds;
       interactionRuntime.getState().reset();

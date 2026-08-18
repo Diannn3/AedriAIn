@@ -1,6 +1,7 @@
 import type { NoteRecord, TaskRecord } from '../core/types';
 import { db } from './db';
-import { defaultNote, defaultTasks } from './defaults';
+import { REDUCED_MOTION_KEY, UI_SCALE_KEY, defaultNote, defaultTasks } from './defaults';
+import { ensureDefaultGestureProfile, garbageCollectBrowserBlobs } from './resources';
 
 const MIGRATION_KEY = 'migration:zustand-v4-to-dexie-v1';
 
@@ -47,15 +48,23 @@ function normalizeLegacyTasks(value: unknown): TaskRecord[] {
 export async function initializeStorage() {
   await db.open();
   const migrated = await db.settings.get(MIGRATION_KEY);
-  if (migrated) return;
 
-  const legacy = readLegacyState();
-  const notes = normalizeLegacyNotes(legacy?.notes);
-  const tasks = normalizeLegacyTasks(legacy?.tasks);
+  if (!migrated) {
+    const legacy = readLegacyState();
+    const notes = normalizeLegacyNotes(legacy?.notes);
+    const tasks = normalizeLegacyTasks(legacy?.tasks);
 
-  await db.transaction('rw', db.notes, db.tasks, db.settings, async () => {
-    if ((await db.notes.count()) === 0) await db.notes.bulkPut(notes.length ? notes : [defaultNote]);
-    if ((await db.tasks.count()) === 0) await db.tasks.bulkPut(tasks.length ? tasks : defaultTasks);
-    await db.settings.put({ key: MIGRATION_KEY, value: { completedAt: Date.now() } });
+    await db.transaction('rw', db.notes, db.tasks, db.settings, async () => {
+      if ((await db.notes.count()) === 0) await db.notes.bulkPut(notes.length ? notes : [defaultNote]);
+      if ((await db.tasks.count()) === 0) await db.tasks.bulkPut(tasks.length ? tasks : defaultTasks);
+      await db.settings.put({ key: MIGRATION_KEY, value: { completedAt: Date.now() } });
+    });
+  }
+
+  await ensureDefaultGestureProfile();
+  await db.transaction('rw', db.settings, async () => {
+    if (!(await db.settings.get(UI_SCALE_KEY))) await db.settings.put({ key: UI_SCALE_KEY, value: 1 });
+    if (!(await db.settings.get(REDUCED_MOTION_KEY))) await db.settings.put({ key: REDUCED_MOTION_KEY, value: false });
   });
+  await garbageCollectBrowserBlobs();
 }

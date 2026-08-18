@@ -39,6 +39,11 @@ export const apps: Record<AppId, SpatialAppDefinition> = {
     capabilities: ['storage.read', 'storage.write', 'files.open', 'files.read'], defaultWindow: appWindowDefaults.document,
     Component: lazyNamed(() => import('./documents/DocumentApp'), 'DocumentApp'),
   },
+  settings: {
+    id: 'settings', title: 'Settings', icon: 'S', singleton: singletonApps.has('settings'), showInDock: true,
+    capabilities: ['storage.read', 'storage.write'], defaultWindow: appWindowDefaults.settings,
+    Component: lazyNamed(() => import('./settings/SettingsApp'), 'SettingsApp'),
+  },
   assistant: {
     id: 'assistant', title: 'AI Console', icon: 'A', singleton: singletonApps.has('assistant'), showInDock: true,
     capabilities: ['ai.tools'], defaultWindow: appWindowDefaults.assistant,

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { GestureEngine } from './gestures';
+import { db } from '../../storage/db';
+import { ACTIVE_GESTURE_PROFILE_KEY, DEFAULT_GESTURE_PROFILE_ID, defaultGestureProfile } from '../../storage/defaults';
+import { gestureProfileRuntime } from './gestureProfileRuntime';
 import { HandIdentityTracker } from './HandIdentityTracker';
 import { handRuntime } from './handRuntime';
 import type { TrackedHand } from './types';
@@ -22,6 +26,21 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
   const gestureEngineRef = useRef(new GestureEngine());
   const identityTrackerRef = useRef(new HandIdentityTracker());
   const [enabled, setEnabled] = useState(false);
+  const activeProfileSetting = useLiveQuery(() => db.settings.get(ACTIVE_GESTURE_PROFILE_KEY), []);
+  const activeProfileId = typeof activeProfileSetting?.value === 'string' ? activeProfileSetting.value : DEFAULT_GESTURE_PROFILE_ID;
+  const activeProfile = useLiveQuery(() => db.gestureProfiles.get(activeProfileId), [activeProfileId]) ?? defaultGestureProfile;
+
+  useEffect(() => {
+    gestureEngineRef.current.updateConfig({
+      pinchOn: activeProfile.pinchOn,
+      pinchOff: activeProfile.pinchOff,
+      pointerSmoothing: activeProfile.pointerSmoothing,
+      dragSmoothing: activeProfile.dragSmoothing,
+      sensitivity: activeProfile.sensitivity,
+    });
+    gestureEngineRef.current.reset();
+    gestureProfileRuntime.getState().setProfile(activeProfile);
+  }, [activeProfile]);
 
   const clearTimers = useCallback(() => {
     if (frameTimerRef.current != null) window.clearTimeout(frameTimerRef.current);
@@ -112,6 +131,39 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
 
+      const failTracker = (phase: 'device-lost' | 'error', message: string) => {
+        readyRef.current = false;
+        busyRef.current = false;
+        if (initTimerRef.current != null) window.clearTimeout(initTimerRef.current);
+        initTimerRef.current = null;
+        workerRef.current?.terminate();
+        workerRef.current = null;
+        streamRef.current?.getTracks().forEach((track) => { if (track.readyState !== 'ended') track.stop(); });
+        streamRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
+        gestureEngineRef.current.reset();
+        identityTrackerRef.current.reset();
+        lastResultAtRef.current = null;
+        inferenceFpsRef.current = 0;
+        setEnabled(false);
+        handRuntime.getState().setState({
+          enabled: false,
+          tracking: false,
+          initializing: false,
+          phase,
+          hands: [],
+          error: message,
+          inferenceFps: 0,
+        });
+      };
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.addEventListener('ended', () => {
+          failTracker('device-lost', 'Camera stream ended or the camera was disconnected.');
+        }, { once: true });
+      }
+
       const wasmRoot = assetUrl('mediapipe/wasm/');
       const modelUrl = assetUrl('mediapipe/models/hand_landmarker.task');
 
@@ -133,7 +185,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
         initTimerRef.current = window.setTimeout(() => {
           if (readyRef.current) return;
           if (delegate === 'GPU') bootWorker('CPU');
-          else handRuntime.getState().setState({ initializing: false, phase: 'error', error: 'Hand tracker initialization timed out.' });
+          else failTracker('error', 'Hand tracker initialization timed out.');
         }, INIT_TIMEOUT_MS);
 
         worker.onmessage = (event) => {
@@ -186,7 +238,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
             if (delegate === 'GPU') {
               bootWorker('CPU');
             } else {
-              handRuntime.getState().setState({ initializing: false, phase: 'error', error: data.error || 'Hand tracker failed to initialize.' });
+              failTracker('error', data.error || 'Hand tracker failed to initialize.');
             }
             return;
           }
@@ -200,7 +252,7 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
         worker.onerror = (event) => {
           busyRef.current = false;
           if (delegate === 'GPU') bootWorker('CPU');
-          else handRuntime.getState().setState({ initializing: false, phase: 'error', error: event.message || 'Hand tracking worker crashed.' });
+          else failTracker('error', event.message || 'Hand tracking worker crashed.');
         };
 
         worker.postMessage({ type: 'INIT', delegate, wasmRoot, modelUrl });
@@ -211,10 +263,18 @@ export function HandTrackingProvider({ children }: PropsWithChildren) {
       setEnabled(false);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      const name = error instanceof DOMException ? error.name : '';
+      const phase = name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'permission-denied'
+        : name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'NotReadableError'
+          ? 'device-unavailable'
+          : 'error';
       handRuntime.getState().setState({
         enabled: false,
+        tracking: false,
         initializing: false,
-        phase: 'error',
+        phase,
+        hands: [],
         error: error instanceof Error ? error.message : String(error),
       });
     }

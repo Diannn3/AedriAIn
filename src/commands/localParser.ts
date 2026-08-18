@@ -7,6 +7,7 @@ const aliases: Array<[RegExp, AppId]> = [
   [/\bcalendar\b|\bschedule\b/i, 'calendar'],
   [/\bmaps?\b/i, 'map'],
   [/\bfiles?\b|\bdocuments?\b/i, 'files'],
+  [/\bsettings?\b|\bpreferences?\b|\bcalibration\b/i, 'settings'],
   [/\b(ai|assistant|console)\b/i, 'assistant'],
 ];
 

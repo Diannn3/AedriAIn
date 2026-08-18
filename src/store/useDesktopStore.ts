@@ -27,6 +27,7 @@ const appTitles: Record<AppId, string> = {
   files: 'Files',
   document: 'Document',
   assistant: 'AI Console',
+  settings: 'Settings',
 };
 
 function windowFor(
@@ -63,6 +64,7 @@ const initialWindows: SpatialWindowModel[] = [
   windowFor('map-main', 'map', 'Maps', [3.6, -1.65, -0.25], 1, { open: false, rotationZ: 0.02, scale: 0.9 }),
   windowFor('files-main', 'files', 'Files', [-3.6, -1.65, -0.25], 1, { open: false, rotationZ: -0.02, scale: 0.9 }),
   windowFor('assistant-main', 'assistant', 'AI Console', [0, 1.95, -0.3], 1, { open: false, scale: 0.92 }),
+  windowFor('settings-main', 'settings', 'Settings', [0, 0.35, 0.1], 1, { open: false }),
 ];
 
 interface DesktopState {
@@ -72,6 +74,7 @@ interface DesktopState {
   openApp: (appId: AppId) => void;
   spawnWindow: (appId: AppId, title?: string, resourceId?: string) => string;
   closeWindow: (id: string) => void;
+  removeWindowsForResource: (resourceId: string) => void;
   minimizeWindow: (id: string) => void;
   toggleMaximizeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
@@ -199,6 +202,12 @@ export const useDesktopStore = create<DesktopState>()(
           : windowModel);
         if (!closing?.focused) return { windows: closed };
         return { windows: focusExactly(closed, fallbackFocus(closed)) };
+      }),
+
+      removeWindowsForResource: (resourceId) => set((state) => {
+        const remaining = state.windows.filter((windowModel) => windowModel.resourceId !== resourceId);
+        const focused = remaining.find((windowModel) => windowModel.focused && windowModel.open && !windowModel.minimized);
+        return { windows: focused ? remaining : focusExactly(remaining, fallbackFocus(remaining)) };
       }),
 
       minimizeWindow: (id) => set((state) => {
@@ -333,7 +342,7 @@ export const useDesktopStore = create<DesktopState>()(
     }),
     {
       name: 'aedriain-desktop',
-      version: 5,
+      version: 6,
       partialize: (state) => ({ windows: state.windows, maxZ: state.maxZ }),
       migrate: (persisted: any) => {
         if (!persisted || typeof persisted !== 'object') return persisted;

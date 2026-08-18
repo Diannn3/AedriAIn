@@ -1,95 +1,114 @@
 # AedriAIn — Webcam Holographic Desktop
 
-AedriAIn is a general-purpose webcam-controlled spatial desktop inspired by fictional holographic interfaces, but built around useful everyday work: files, documents, schedules, maps, tasks, notes, and AI.
+AedriAIn is a general-purpose webcam-controlled spatial desktop inspired by fictional holographic interfaces, but built around useful everyday work: files, documents, schedules, maps, tasks, notes, settings, and eventually AI.
 
-The current implementation milestone is **Documents V1 on Core V2.2**. It keeps the Core V2.1 hand/window/security foundation and adds a real resource database, app/window geometry contracts, secure file streaming, and a custom spatial PDF workflow.
+The current milestone is **Documents V1.1 + Calibration Foundation**. It keeps the Core V2.2 spatial/window/security contract and hardens the first real productivity workflow: durable PDFs, relinking/removal, cached search, virtualized long-document reading, gesture profiles, and explicit camera/tracker recovery states.
 
-## Current highlights
+## Current capabilities
 
 ### Spatial input and windows
 
-- MediaPipe Hand Landmarker in a Web Worker with GPU -> CPU fallback
-- local MediaPipe WASM + pinned Hand Landmarker model staging
-- stable temporal hand IDs with motion prediction
-- configurable pinch hysteresis/pointer smoothing
-- Three.js raycasting against explicit spatial targets
-- separate window `chrome` and app `content` interaction regions
-- one-hand header pinch -> world-space window grab
-- content pinch -> focus/activate normal app controls without dragging the window
-- two-hand translation + scale + rotation with stable gesture ownership
-- two-hand -> one-hand continuation when one hand releases
-- visible world-space pointer beam
-- mouse dragging on the same camera-facing world-plane math
-- true layout resize (`width`/`height`) separate from hologram scale
-- per-app default/min/max window geometry
-- minimize/maximize/focus/z-order invariants
-- lazy-loaded apps with per-window error isolation
+- MediaPipe Hand Landmarker runs in a Web Worker with GPU → CPU fallback.
+- Hand identities remain stable across detector reordering and short gaps.
+- Three.js camera rays target explicit spatial surfaces rather than DOM rectangles.
+- Window `chrome` and app `content` are separate interaction regions.
+- Header pinch moves a window; content pinch can activate normal app controls without starting a one-hand window drag.
+- Two-hand pinch translates, spatially scales, and rotates a window while preserving captured hand ownership.
+- Releasing one hand during a transform falls back to a continuous one-hand grab.
+- Window layout resize is distinct from hologram/spatial scale.
+- Apps are lazy-loaded and isolated by per-window error boundaries.
+- Mouse and keyboard remain first-class fallbacks.
 
 ### Durable resources
 
-- Dexie/IndexedDB owns durable Notes, Tasks, Documents, browser PDF Blobs, settings, and gesture-profile records
-- Zustand persists only workspace/window state
-- legacy Core V2.1 Notes/Tasks migrate into Dexie **before the Zustand store is imported**
-- Notes are true multi-resource/multi-window records
-- Tasks are durable resources rather than demo state
-- browser-selected PDFs are retained as IndexedDB Blobs
+Dexie/IndexedDB owns durable product data:
 
-### Files and Documents V1
+- Notes
+- Tasks
+- Documents
+- browser PDF Blobs
+- cached PDF page text
+- settings
+- gesture profiles
 
-- Electron never exposes filesystem paths to renderer code
-- user-approved files receive opaque session tokens
-- `aedriain://app/_resource/file/<token>` streams approved desktop files
-- GET / HEAD / single-range responses for PDF.js partial loading
-- dev-mode CORS exposes Range/Content-Range safely for the custom resource origin
-- bounded direct-read IPC remains only for smaller future text/JSON workflows
-- Files opens PDFs **inside AedriAIn** while unsupported formats still use the system viewer
-- multiple PDF files can spawn independent spatial document windows
-- recent document resources persist
-- custom AedriAIn PDF.js viewer with:
-  - page navigation
-  - zoom
-  - fit width / fit page
-  - rotation
-  - selectable text layer
-  - lazy thumbnails
-  - document-wide text search
-  - persisted page/zoom/rotation
-  - external-open fallback
-- `research mode` arranges Document + Notes + Tasks; before a PDF exists, it opens Files instead
+Zustand owns only spatial workspace/window state. The legacy Core V2.1 Notes/Tasks payload migrates into Dexie before the window store is imported.
 
-### Validation/tooling
+### Files and Documents V1.1
 
-- dependency-light bootstrap tests
-- Vitest unit contracts for hand/command/storage/workspace behavior
-- fake IndexedDB test runtime for Dexie tests
-- Playwright browser E2E for notes, files, two-PDF persistence, PDF search, Research workspace, and layout resize
-- production Electron smoke harness
-- GitHub Actions validation matrix
-- render FPS/DPR and MediaPipe inference FPS/latency telemetry
+- Desktop filesystem paths stay in Electron main.
+- User-approved files receive opaque session tokens.
+- `aedriain://app/_resource/file/<token>` serves approved desktop files with GET/HEAD and single-range responses for PDF.js.
+- Browser PDFs are stored as IndexedDB Blobs.
+- PDFs open inside AedriAIn as independent resource-backed spatial windows.
+- Recent documents can be reopened, relinked into the same resource, or removed from AedriAIn without deleting the original OS file.
+- Browser Blob garbage collection removes unreferenced copies.
+- A source fingerprint warns before relinking an obviously different PDF.
+- Cached per-page text indexing runs with bounded concurrency and is reused by later searches.
+- Search supports normalized whitespace and a whitespace-insensitive fallback for awkward PDF text-span splits.
+- Reader modes:
+  - single page
+  - continuous virtualized scroll
+- Thumbnail and continuous-page lists mount only nearby rows with measured-size overscan.
+- PDF reader includes page navigation, zoom, fit width/page, rotation, selectable text, search results, lazy/virtualized thumbnails, persisted page/zoom/rotation/mode, password prompts, explicit corrupt/missing-source states, and external-open fallback.
+- `research mode` arranges Document + Notes + Tasks, or opens Files when no document exists yet.
+
+### Settings and gesture calibration
+
+The Settings app now provides:
+
+- active gesture-profile selection
+- new custom profiles
+- automatic / left / right preferred hand
+- separate pointer and drag smoothing
+- pointer sensitivity
+- two-sample pinch calibration with bounded thresholds
+- UI text scaling
+- reduced-motion preference
+- tracker phase/delegate/inference status
+
+The active profile updates the running GestureEngine without restarting the camera. Preferred-hand policy also participates in two-hand transform ownership unless an existing gesture capture already owns control.
+
+### Camera/tracker recovery
+
+The runtime distinguishes:
+
+- requesting camera
+- initializing
+- ready
+- tracking
+- recovering / CPU fallback
+- permission denied
+- device unavailable
+- device lost
+- tracker error
+
+If the camera track ends or the final tracker fallback fails, stale hands are cleared and the failed stream/worker are torn down so the user can explicitly re-enable tracking.
 
 ## Requirements
 
 - Node.js 22.12+
 - npm 10+
-- a webcam for hand tracking
+- webcam for hand tracking
 
 ## Setup
 
+The repository expects a lockfile that exactly matches `package.json`.
+
 ```bash
-npm install
+npm ci
 npm run setup
 npm run dev
 ```
 
-`npm run setup` stages runtime assets from the pinned packages:
+If the committed lockfile is stale, see `docs/LOCKFILE_RECOVERY.md`. CI can legitimately regenerate the lockfile on a networked runner and uploads that exact file as an artifact before validation jobs run.
 
-- MediaPipe Tasks WASM from `@mediapipe/tasks-vision`
-- the pinned official Hand Landmarker model
-- PDF.js worker/CMaps/standard fonts/WASM/ICC assets from `pdfjs-dist`
+`npm run setup` stages local runtime assets from pinned packages:
 
-The application then serves those runtime assets from its own origin rather than relying on runtime CDNs.
+- MediaPipe Tasks WASM
+- pinned Hand Landmarker model
+- PDF.js worker, CMaps, standard fonts, WASM, and ICC assets
 
-Click **Enable hands** and allow video-camera access.
+Production runtime does not rely on a PDF or MediaPipe CDN.
 
 ### Electron development
 
@@ -105,26 +124,23 @@ npm run build
 npm run desktop
 ```
 
-Production builds intentionally fail when required MediaPipe/PDF.js assets are missing.
-
 ## Controls
 
-- point -> spatial hover/pointer
-- pinch window header -> grab/move window
-- pinch an app control -> focus/activate that control
-- two simultaneous pinches on one window -> move + scale + rotate
-- release one hand mid-transform -> continue as one-hand grab
-- fist over focused target -> reset rotation
-- bottom-right resize handle -> change app layout area without changing spatial scale
-- mouse/keyboard remain first-class fallbacks
+- point → spatial hover/pointer
+- pinch window header → move window
+- pinch app control → activate/focus app control
+- two pinches on one window → move + spatial scale + rotate
+- release one hand mid-transform → continue one-hand grab
+- fist over focused target → reset rotation
+- bottom-right resize handle → change app layout area without changing hologram scale
+- mouse/keyboard → full fallback/precision path
 
 ## Commands
-
-Examples:
 
 ```text
 open files
 open calendar
+open settings
 new notes
 study mode
 planning mode
@@ -136,35 +152,41 @@ reset workspace
 
 ## Validation
 
+Dependency-light checks available even in restricted environments:
+
 ```bash
 npm run test:bootstrap
+node scripts/verify-lockfile.mjs
+```
+
+Full networked validation:
+
+```bash
+npm ci
+npm run setup
 npm run typecheck
 npm run test
-npm run test:e2e
 npm run build
+npm run test:e2e
 npm run test:electron
 ```
 
-See `docs/VALIDATION.md` for what has been verified in the current restricted build environment and what still requires the first networked dependency install/CI run.
+See:
+
+- `docs/VALIDATION.md`
+- `docs/PERFORMANCE_BASELINE.md`
+- `docs/LOCKFILE_RECOVERY.md`
 
 ## Current limitations
 
-- The first networked `npm install` still needs to generate and commit `package-lock.json`.
-- This environment cannot currently perform the real dependency-aware Vite/Vitest/Playwright/Electron runtime matrix because shell DNS/registry access is unavailable.
-- Electron file tokens are intentionally session-scoped. After a full Electron process restart, a recent desktop PDF may ask the user to re-select the file; the renderer still never stores its raw OS path.
-- PDF annotations/editing and continuous multi-page virtualization are later document milestones; Documents V1 focuses on reliable reading/search/navigation.
+- This execution environment still cannot reach npm/GitHub from the shell, so the current V1.1 source cannot truthfully claim a locally regenerated dependency lock or dependency-aware runtime build here.
+- Electron file authorization is intentionally session-scoped. After a full Electron process restart, a desktop PDF can require relinking; the durable DocumentRecord survives.
+- The continuous reader virtualizes mounted React/page trees, but page-height estimation is still refined as rows are measured; very large heterogeneous PDFs require the first networked/manual benchmark pass.
+- PDF annotation/editing is not part of Documents V1.1.
+- Rich Notes, real Calendar/Maps, capability enforcement, AI tools, advanced visual effects, phone input, and WebXR remain later milestones.
 
-## Product boundary
+## Next milestone
 
-AedriAIn core is not tied to UPLB or another campus. Campus-specific features can later be plugins without changing the spatial input/window/resource architecture.
+After V1.1 passes the networked CI/runtime/performance gate, the next product branch is **Notes V2 + Document-linked Research Workspace**. That branch should reuse the existing resource/window/document-index contracts rather than change the platform foundation again.
 
-## Next milestone after Documents V1 runtime validation
-
-1. gesture calibration profiles and settings UI
-2. Notes V2 rich editor on the resource database
-3. Tasks/Calendar upgrades
-4. generic Maps V2
-5. permission-checked AI tools using the same resource/command boundaries
-6. Tony-Stark visual/postprocessing pass only after performance baselines remain healthy
-
-See `docs/ARCHITECTURE.md`, `docs/RESEARCH.md`, `docs/THIRD_PARTY_NOTES.md`, and `docs/VALIDATION.md` for implementation details.
+AedriAIn core remains generic; campus-specific functionality can be layered later as plugins or domain modules.

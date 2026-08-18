@@ -37,4 +37,15 @@ describe('GestureEngine', () => {
     const hand = baseHand(); hand[4] = { x: 0.46, y: 0.25, z: 0 }; hand[8] = { x: 0.54, y: 0.25, z: 0 };
     expect(engine.analyze(tracked(hand), 0).pinching).toBe(false);
   });
+
+  it('applies calibrated pointer sensitivity and drag smoothing', () => {
+    const engine = new GestureEngine({ pointerSmoothing: 1, dragSmoothing: 1, sensitivity: 1.5 });
+    const hand = baseHand();
+    hand[8] = { x: 0.60, y: 0.25, z: 0 };
+    hand[4] = { x: 0.50, y: 0.25, z: 0 };
+    const result = engine.analyze(tracked(hand), 0);
+    expect(result.pointer.x).toBeCloseTo(0.65, 4);
+    expect(result.pinchPoint.x).toBeCloseTo(0.575, 4);
+  });
+
 });

@@ -1,51 +1,83 @@
-name: Core validation
+name: AedriAIn validation
 
 on:
   push:
-    branches: [core-v2, 'core-v2.*', main, master]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  validate:
+  lockfile:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           package-manager-cache: false
-      - name: Install dependencies
+      - name: Use repository npm version
+        run: npm install --global npm@10.9.2
+      - name: Verify or regenerate lockfile
         shell: bash
         run: |
-          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
-      - name: Bootstrap core tests
+          npm --version
+          if node scripts/verify-lockfile.mjs; then
+            echo "Using committed lockfile."
+          else
+            echo "Committed lockfile is missing/stale; regenerating from package.json on the networked runner."
+            rm -f package-lock.json
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            node scripts/verify-lockfile.mjs
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aedriain-lockfile
+          path: package-lock.json
+          retention-days: 14
+
+  validate:
+    needs: lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: aedriain-lockfile
+          path: .
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: node scripts/verify-lockfile.mjs
+      - run: npm ci
+      - name: Bootstrap regressions
         run: npm run test:bootstrap
       - name: Stage local runtime assets
         run: npm run setup
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Unit tests
-        run: npm run test
-      - name: Build
-        run: npm run build
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
       - name: Electron syntax
-        run: node --check electron/main.cjs && node --check electron/preload.cjs
+        run: node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/file-resource.cjs
 
   browser-e2e:
+    needs: lockfile
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: aedriain-lockfile
+          path: .
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-          package-manager-cache: false
-      - name: Install dependencies
-        shell: bash
-        run: |
-          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - run: npm run setup
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -57,19 +89,41 @@ jobs:
           retention-days: 14
 
   electron-smoke:
+    needs: lockfile
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: aedriain-lockfile
+          path: .
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-          package-manager-cache: false
-      - name: Install dependencies
-        shell: bash
-        run: |
-          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - run: npm run setup
       - run: npm run build
       - name: Production Electron smoke
         run: xvfb-run -a npm run test:electron
+
+  production-audit:
+    needs: lockfile
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: aedriain-lockfile
+          path: .
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high

@@ -1,73 +1,65 @@
-# AedriAIn architecture — Core V2.2 / Documents V1
+# AedriAIn architecture — Documents V1.1 / Calibration Foundation
 
 ## Product boundary
 
-AedriAIn is a general-purpose webcam-controlled holographic spatial desktop. Files, documents, schedules, maps, tasks, notes, AI, search, and future plugins sit on one reusable input -> interaction -> window -> resource platform.
+AedriAIn is a generic webcam-controlled spatial desktop. Files, documents, notes, tasks, schedules, maps, settings, AI, and future plugins sit on one reusable input → interaction → window → resource platform. The core is not campus-specific.
 
 ## Runtime flow
 
 ```text
 Camera
-  -> MediaPipe Worker
-  -> Hand Identity Tracker
-  -> Gesture Engine
-  -> Hand Runtime
-  -> Hand Interaction Controller
+  → MediaPipe Worker
+  → Hand Identity Tracker
+  → Gesture Engine ← active GestureProfile
+  → Hand Runtime
+  → Hand Interaction Controller
 
-Three Camera + Registered Spatial Targets
-  -> Raycast
-  -> region-aware hover / content action / grab / transform
-  -> Desktop Store
-  -> Spatial Windows
+Three Camera + Spatial Target Registry
+  → raycast chrome/content regions
+  → hover / content activation / grab / transform
+  → Desktop Store
+  → Spatial Windows
 
-Mouse
-  -> camera-facing drag/resize plane math
-  -> Desktop Store
+Mouse / keyboard
+  → normal DOM app input + camera-plane window drag/resize
 
-Durable app resources
-  -> Dexie / IndexedDB
-  -> Notes / Tasks / Documents / Blobs / Settings / Gesture Profiles
+Durable resources
+  → Dexie / IndexedDB
+  → Notes / Tasks / Documents / PDF page index / browser Blobs / Settings / Gesture Profiles
 
 Electron file picker
-  -> opaque file token in main process
-  -> aedriain://app/_resource/file/<token>
-  -> PDF.js range-capable document source
+  → opaque token in main process
+  → aedriain://app/_resource/file/<token>
+  → range-capable PDF.js source
 
 Text / Voice
-  -> Local Parser
-  -> Typed Command Bus
-  -> Desktop Store
+  → Local Parser
+  → Typed Command Bus
+  → Desktop Store
 ```
 
-Raw camera landmarks never mutate application state directly.
+Raw camera landmarks never mutate product resources directly.
 
-## Startup ordering and migration safety
+## Startup ordering and migrations
 
-`src/main.tsx` initializes the resource database before dynamically importing `App`.
+`src/main.tsx` runs `initializeStorage()` before dynamically importing `App`.
 
-This ordering is deliberate. Core V2.1 stored Notes/Tasks in the Zustand persistence payload. Documents V1 migrates those records into Dexie before `useDesktopStore` is imported/hydrated, preventing the new window-only store schema from racing the legacy resource migration.
-
-After initialization:
-
-- Dexie = durable product resources
-- Zustand = windows/workspace/runtime UI state
-- vanilla Zustand runtimes = high-frequency hand/interaction/performance state
-
-## Resource database
-
-`AedriAInDatabase` currently contains:
+This ordering prevents Zustand workspace hydration from racing resource migrations. The current durable database uses Dexie schema v2:
 
 ```text
 notes
   id, title, content, createdAt, updatedAt
 
 tasks
-  id, title, description?, dueAt?, status, priority, createdAt, updatedAt
+  id, title, description?, status, priority, dueAt?, createdAt, updatedAt
 
 documents
   id, name, mimeType, size,
-  sourceKind, sourceId,
-  lastOpenedAt, currentPage, zoom, rotation
+  sourceKind, sourceId, sourceFingerprint,
+  lastOpenedAt, currentPage, zoom, rotation, viewMode
+
+documentPages
+  [documentId + pageNumber], text, normalizedText, indexedAt
 
 browserBlobs
   id, blob
@@ -78,244 +70,251 @@ settings
 gestureProfiles
   id, name, preferredHand,
   pinchOn, pinchOff,
-  pointerSmoothing, dragSmoothing, sensitivity
+  pointerSmoothing, dragSmoothing, sensitivity, updatedAt
 ```
 
-The gesture-profile table is intentionally present before the calibration UI so the future settings pass does not require another storage redesign.
+Dexie v2 upgrades Documents V1 records by adding a source fingerprint and `single` view mode when absent.
 
-## App/window/resource separation
+Legacy Core V2.1 Notes/Tasks still migrate from the old Zustand payload exactly once.
 
-An app definition is not a window and a window is not the durable resource it displays.
+## State ownership
+
+### Dexie
+
+Owns durable product data:
+
+- note/task/document records
+- browser PDF copies
+- cached PDF page text
+- gesture profiles
+- UI preferences
+
+### Zustand desktop store
+
+Owns spatial/runtime workspace state:
+
+- windows
+- focus
+- z-order
+- geometry
+- open/minimized/maximized state
+- workspace layouts
+
+### vanilla high-frequency stores
+
+Own transient state that should not cause React/resource persistence churn:
+
+- hand runtime
+- interaction runtime
+- camera runtime
+- performance runtime
+- active gesture profile mirror
+
+## App / window / resource separation
 
 ```text
 SpatialAppDefinition
-  -> capabilities
-  -> singleton policy
-  -> default/min/max geometry
-  -> lazy component loader
+  → id / title / icon
+  → singleton policy
+  → capabilities
+  → default/min/max window geometry
+  → lazy component loader
 
 SpatialWindowModel
-  -> appId
-  -> resourceId?
-  -> title
-  -> width / height
-  -> position / rotationZ / spatial scale
-  -> open / minimized / maximized / focused
-  -> zOrder
+  → appId
+  → resourceId?
+  → title
+  → width / height
+  → position / rotationZ / spatial scale
+  → open / minimized / maximized / focused / zOrder
 
-Durable resource
-  -> NoteRecord / DocumentRecord / later ConversationRecord etc.
+Durable Resource
+  → NoteRecord / DocumentRecord / later EventRecord / ConversationRecord
 ```
 
 Current instance policy:
 
 - Notes: multi-instance
-- Documents: multi-instance
+- Documents: multi-instance, resource-created, hidden from dock
 - Tasks: singleton
 - Calendar: singleton
 - Maps: singleton
 - Files: singleton
-- AI Console: singleton
+- Settings: singleton
+- AI Console: singleton placeholder
 
-Documents are intentionally hidden from the dock. A document window is created by opening a real document resource rather than launching an empty PDF shell.
+## Window interaction regions
 
-## Lazy app boundary
-
-The app registry uses dynamic imports/`React.lazy`. Heavy future modules such as PDF, rich notes, maps, calendar, and AI do not enter the initial application chunk merely because they exist in the registry.
-
-Every spatial window wraps its app surface in its own error boundary. A failed PDF/editor/map module therefore does not take down the desktop shell.
-
-## Window geometry vs spatial scale
-
-`SpatialWindowModel` has two different size concepts:
+Each spatial window registers separate Three.js interaction targets:
 
 ```text
-width / height
-  -> layout area available to the app
-  -> changes DOM panel dimensions and Three interaction geometry together
+chrome
+  → one-hand pinch may start a window grab
 
-scale
-  -> physical/holographic scale of the whole panel
-  -> text/chrome/content scale together
+content
+  → one-hand pinch never starts a window drag
+  → conservative DOM-control activation can occur
+
+both regions
+  → two-hand transform may manipulate the owning window
 ```
 
-The bottom-right resize handle changes layout geometry while keeping the opposite corner anchored, including rotated/scaled windows. Per-app geometry bounds prevent unusably tiny/huge layouts.
+This separation is required for rich app surfaces such as PDF, maps, calendar, and future editors.
 
-## Region-aware spatial interaction
+## Layout resize vs spatial scale
 
-Each visible window registers separate Three targets:
+`width` and `height` change how much app UI fits inside a panel.
+
+`scale` changes the physical/spatial size of the entire hologram.
+
+The resize handle preserves the opposite corner in world space, including rotated/scaled windows. App definitions own default/min/max geometry.
+
+## Hand identity and gesture profiles
+
+MediaPipe detection array order is not identity. `HandIdentityTracker` uses temporal matching and motion prediction to keep stable IDs.
+
+The active `GestureProfile` configures the running `GestureEngine`:
+
+- pinch hysteresis thresholds
+- pointer smoothing
+- drag/pinch smoothing
+- pointer sensitivity
+- preferred hand policy
+
+Settings changes propagate live. Existing captured gesture ownership wins over a preference change so an active drag/transform does not jump hands.
+
+Calibration samples normalized thumb/index distance for an open hand and a comfortable pinch, derives hysteresis thresholds, then sends them through bounded profile validation before persistence.
+
+## Camera/tracker lifecycle
+
+`HandTrackingProvider` explicitly represents:
 
 ```text
-chrome  (higher priority)
-content (lower priority)
+idle
+requesting-camera
+initializing
+ready
+tracking
+recovering
+permission-denied
+device-unavailable
+device-lost
+error
 ```
 
-Ray selection uses physical depth first when objects are meaningfully separated. For near-coplanar panels, target priority/window z-order resolves overlap.
+GPU initialization falls back to CPU. If the final fallback fails or times out, the worker/stream are torn down and stale hands are cleared. A media-track `ended` event produces `device-lost` and the user can explicitly re-enable tracking.
 
-One-hand pinch behavior:
+## Secure desktop file resources
+
+Renderer code never receives raw filesystem paths.
+
+Picker flow:
 
 ```text
-chrome pinch
-  -> begin/continue window grab
-
-content pinch
-  -> focus window
-  -> conservatively activate/focus a real DOM control under the hand
-  -> does NOT drag the window
+user picker
+  → Electron main resolves path
+  → random opaque token
+  → renderer gets { id, name, size, mimeType, modifiedAt }
 ```
 
-The DOM bridge only handles normal controls such as buttons/inputs/selects/links. It does not emulate arbitrary mouse motion or synthetic text dragging.
-
-Two-hand transforms remain window-level even when the hands originate over content:
-
-- midpoint -> translation
-- relative distance -> scale
-- angle delta -> rotation
-
-Gesture ownership is held by stable hand IDs. Releasing one hand during a transform hands control to the remaining pinching hand.
-
-## MediaPipe runtime
-
-`HandTrackingProvider` owns camera lifecycle and worker recovery:
-
-- GPU-first initialization
-- CPU fallback
-- initialization timeout
-- hidden-tab frame suppression
-- one-inference-in-flight backpressure
-- inference latency/FPS and dropped-frame telemetry
-- stable identity tracker between raw detections and gestures
-
-The worker loads local runtime assets staged under:
+PDF access:
 
 ```text
-public/mediapipe/wasm/
-public/mediapipe/models/hand_landmarker.task
+aedriain://app/_resource/file/<token>
 ```
 
-The model is passed to `HandLandmarker` as a byte buffer.
-
-## Secure Electron file capability
-
-Raw OS paths remain in Electron main.
-
-Picker output to renderer:
-
-```text
-FileDescriptor {
-  id          // opaque session token
-  name
-  size
-  mimeType
-}
-```
-
-Renderer capabilities:
-
-```text
-pickFiles()
-openFile(id)
-readFile(id)          // small/bounded read path
-fileResourceUrl(id)  // same-origin stream URL
-revokeFile(id)
-```
-
-The resource URL is:
-
-```text
-aedriain://app/_resource/file/<opaque-token>
-```
-
-The protocol handler validates the token and serves only user-approved files. It supports:
+The custom protocol supports:
 
 - GET
 - HEAD
-- OPTIONS for dev CORS
-- a single HTTP byte range (206)
-- 416 invalid range handling
-- MIME metadata
-- `nosniff`
-- `no-store`
-- bounded token registry
+- single byte ranges / 206
+- 416 for invalid ranges
+- restricted dev CORS/preflight for the exact Vite origin
+- `Accept-Ranges`, `Content-Range`, `nosniff`, and `no-store`
 
-Development mode allows only the configured Vite origin and explicitly exposes Range/Content-Range headers. Production document loads are same-origin under `aedriain://app`.
+Tokens are intentionally session-scoped. Durable Electron DocumentRecords can therefore enter a `needs-relink` state after a process restart.
 
-Tokens are intentionally process/session scoped. A desktop document from a previous Electron process may need to be re-selected, preserving the rule that renderer persistence never stores a raw filesystem path.
+## Document source lifecycle
 
-## Browser document source
+`DocumentRecord` stores a fingerprint containing name, size, MIME type, and modified time when available.
 
-Browser-selected PDFs are stored as `Blob` values in IndexedDB. The document app resolves them to temporary `blob:` URLs and revokes those URLs when the source changes/unmounts.
+Relink reuses the same document ID/window/resource. If the fingerprint changes, cached page text is invalidated. A matching fingerprint keeps the existing text index.
 
-Electron and browser sources converge on a URL-like `DocumentSource`, keeping the PDF app platform-agnostic.
+Removing a document:
 
-## Documents V1 / PDF.js
+- closes all windows attached to the resource
+- deletes cached page text
+- deletes DocumentRecord metadata
+- deletes an unreferenced browser Blob
+- revokes the Electron token when possible
+- never deletes the original OS file
 
-Documents V1 uses the **PDF.js display layer directly** rather than embedding the stock Firefox viewer or an iframe-based wrapper.
+Startup garbage collection removes orphan browser Blobs.
 
-Reasons:
+## PDF.js reader
 
-- strict AedriAIn CSP remains intact
-- local/self-hosted worker and support assets
-- custom AedriAIn toolbar/layout
-- no runtime CDN dependency
-- clean integration with Electron range-capable resource URLs
-- multi-window lazy loading
+Documents lazy-load `pdfjs-dist` and use its display layer directly. Runtime worker/CMap/font/WASM/ICC assets are staged locally.
 
-Staged PDF.js assets:
+### Text index
 
-```text
-public/pdfjs/pdf.worker.min.mjs
-public/pdfjs/cmaps/
-public/pdfjs/standard_fonts/
-public/pdfjs/wasm/
-public/pdfjs/iccs/
-```
-
-Current viewer layers:
+Opening a PDF starts a bounded-concurrency background index:
 
 ```text
-DocumentApp
-  -> document metadata/source resolution
-  -> PDF loading task
-  -> toolbar/search/thumbnails/view state
-
-PdfPageView
-  -> HiDPI canvas render
-  -> PDF.js TextLayer for selectable text
-  -> lightweight local search highlighting
-
-PdfThumbnail
-  -> IntersectionObserver lazy thumbnail rendering
+PDF page
+  → getTextContent()
+  → normalized page text
+  → Dexie documentPages
 ```
 
-Search scans page text asynchronously and can be cancelled by starting/changing a query. Typing a search term no longer rerenders the PDF canvas; page rendering and text highlighting are separate effects.
+Search reuses this cache rather than extracting the entire PDF on every query. Query normalization includes a whitespace-insensitive fallback for PDF span splits.
 
-## Research workspace
+### Virtualized reading
 
-Research mode is resource-aware at the window layer:
+The reader supports:
 
-- existing document -> primary Document + Notes + Tasks
-- no document yet -> Files opens/focuses so the user can select one
+- single-page mode
+- continuous mode
 
-The primary document is chosen from existing document windows by z-order, so the most recently focused document naturally becomes the Research surface.
+The internal `useVirtualList` primitive owns measured variable-height virtualization for:
 
-## Performance telemetry
+- continuous pages
+- thumbnail rail
 
-`PerformanceProbe` records render FPS/frame time/DPR.
+It uses overscan, ResizeObserver measurements, programmatic index scrolling, measurement invalidation after zoom/rotation, and binary-search visible-range lookup. Total PDF page count therefore does not equal mounted React/page tree count.
 
-`HandTrackingProvider` separately records:
+## Settings / accessibility foundation
 
-- MediaPipe inference FPS
-- inference latency
-- dropped camera frames
+Settings currently persists:
 
-Documents V1 must be manually profiled with multiple PDF windows before postprocessing/AI is added.
+- active gesture profile
+- UI scale
+- reduced motion
 
-## Next architecture work after runtime validation
+`App` applies UI scale through `--ui-scale` and a reduced-motion class globally. This is an accessibility foundation, not the final accessibility pass.
 
-1. user-facing gesture calibration/profile selection
-2. richer Notes editor on Dexie
-3. Tasks/Calendar real data model/UI upgrades
-4. generic MapLibre app
-5. capability enforcement around AI tools
-6. selective visual/postprocessing layer with performance guardrails
+## Lazy apps and fault containment
+
+The registry uses `React.lazy`/dynamic imports. PDF/Settings/other apps are not loaded merely because their manifest exists.
+
+Every spatial app is wrapped in an app-level error boundary so a failed document/editor/map module does not crash the desktop shell.
+
+## Validation architecture
+
+Two validation layers exist:
+
+### Dependency-light
+
+- bootstrap GestureEngine/parser/hand-selection tests
+- pure Electron file-range/MIME tests
+- Node syntax checks
+- TS/TSX parser/import audits
+
+### Dependency-aware networked CI
+
+The first CI job verifies the committed lockfile. If it is missing/stale, npm legitimately regenerates it on the networked runner and uploads one exact `aedriain-lockfile` artifact. Every downstream job downloads that same file and uses `npm ci`.
+
+See `docs/LOCKFILE_RECOVERY.md`, `docs/VALIDATION.md`, and `docs/PERFORMANCE_BASELINE.md`.
+
+## Next architecture boundary
+
+After V1.1 passes networked validation and performance measurement, Notes V2 should consume the existing resource/service/window contracts. It should not move durable data back into the desktop store or special-case the spatial interaction engine.

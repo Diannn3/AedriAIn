@@ -78,3 +78,23 @@ assert.equal(choosePrimaryHand([hand('point','Left','POINT'),hand('pinch','Right
 console.log('hand-selection: PASS');
 TEST
 node "$OUT/selection/test.cjs"
+
+tsc src/ui/virtualMath.ts --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/virtual" --strict --skipLibCheck
+cat > "$OUT/virtual/test.cjs" <<'TEST'
+const assert = require('node:assert/strict');
+const { getVisibleRange } = require('./virtualMath.js');
+const count = 1000;
+const size = 100;
+const starts = Array.from({ length: count }, (_, index) => index * size);
+const sizes = Array.from({ length: count }, () => size);
+assert.deepEqual(getVisibleRange(starts, sizes, 0, 0, 500, 2), { start: 0, end: -1 });
+const nearStart = getVisibleRange(starts, sizes, count, 0, 500, 2);
+assert.equal(nearStart.start, 0);
+assert.ok(nearStart.end < 10);
+const nearEnd = getVisibleRange(starts, sizes, count, 98500, 500, 2);
+assert.ok(nearEnd.start > 980);
+assert.equal(nearEnd.end, 993);
+assert.ok(nearEnd.end - nearEnd.start < 15);
+console.log('virtual-range: PASS');
+TEST
+node "$OUT/virtual/test.cjs"
