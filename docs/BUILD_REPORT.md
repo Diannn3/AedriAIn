@@ -159,6 +159,12 @@ See `docs/VALIDATION.md` for the final matrix and `docs/PERFORMANCE_BASELINE.md`
 
 ## Final dependency-light freeze
 
-At final freeze the implementation contains 110 project files. The local matrix passes the GestureEngine, command parser, hand-selection, virtual-range, and file-resource bootstrap regressions; all 68 TS/TSX files parse; 79 source/script files have resolving relative imports; all bare third-party imports are declared; CSS/CI YAML/JSON parse; all three PDF fixtures pass header/EOF sanity checks; and `docs/FILELIST.txt` matches the tree exactly.
+At final freeze the implementation contains 114 project files. The local matrix passes the GestureEngine, command parser, hand-selection, virtual-range, and file-resource bootstrap regressions; all 68 TS/TSX files parse; 79 source/script files have resolving relative imports; all bare third-party imports are declared; CSS/CI YAML/JSON parse; all three PDF fixtures pass header/EOF sanity checks; and `docs/FILELIST.txt` matches the tree exactly.
 
 The only intentional local gate failure is `scripts/verify-lockfile.mjs`, because no legitimate V1.1 lockfile can be generated without npm network access. The networked CI lockfile job is responsible for that resolution before downstream `npm ci` validation.
+
+## Dependency bootstrap hardening
+
+The project now has a cross-platform dependency doctor and bootstrap path. `npm run dev` and `npm run desktop:dev` verify the installed direct package versions before Vite starts, preventing stale `node_modules` trees from surfacing as opaque module-resolution overlays. `npm run bootstrap` chooses `npm ci` for a valid lock or `npm install` for a missing/stale lock, clears the Vite optimizer cache, stages runtime assets, and verifies the resulting environment.
+
+The previous Bash-only core bootstrap regression was replaced with a Node runner so the same command works on Windows, macOS, and Linux.

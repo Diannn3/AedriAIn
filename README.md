@@ -92,15 +92,39 @@ If the camera track ends or the final tracker fallback fails, stale hands are cl
 
 ## Setup
 
-The repository expects a lockfile that exactly matches `package.json`.
+### First setup, branch changes, or dependency repairs
+
+Use the project bootstrap instead of starting Vite against an old `node_modules` tree:
 
 ```bash
-npm ci
-npm run setup
-npm run dev
+npm run bootstrap
 ```
 
-If the committed lockfile is stale, see `docs/LOCKFILE_RECOVERY.md`. CI can legitimately regenerate the lockfile on a networked runner and uploads that exact file as an artifact before validation jobs run.
+`bootstrap` is dependency-free project tooling. It:
+
+1. verifies whether the current `package-lock.json` matches `package.json`
+2. uses `npm ci` when the lock is valid, otherwise `npm install` to resolve the manifest and create/update the lock
+3. clears Vite's `node_modules/.vite` dependency cache
+4. stages MediaPipe and PDF.js runtime assets
+5. verifies the installed direct dependency versions and runtime assets
+
+After that:
+
+```bash
+npm run dev
+# or
+npm run desktop:dev
+```
+
+Both development commands run `npm run verify:install` before Vite starts. A stale install therefore fails in the terminal with an actionable repair command instead of reaching a Vite `Failed to resolve import` overlay.
+
+You can run the dependency doctor directly at any time:
+
+```bash
+npm run doctor
+```
+
+If the committed lockfile is stale or absent, see `docs/LOCKFILE_RECOVERY.md`. After the first successful networked bootstrap, verify and commit the generated `package-lock.json` so future clean checkouts can use `npm ci`.
 
 `npm run setup` stages local runtime assets from pinned packages:
 
@@ -152,12 +176,15 @@ reset workspace
 
 ## Validation
 
-Dependency-light checks available even in restricted environments:
+Install/bootstrap diagnostics:
 
 ```bash
+npm run doctor
+npm run verify:lockfile
 npm run test:bootstrap
-node scripts/verify-lockfile.mjs
 ```
+
+`npm run test:bootstrap` is cross-platform Node tooling; it no longer requires Bash on Windows.
 
 Full networked validation:
 
@@ -176,6 +203,7 @@ See:
 - `docs/VALIDATION.md`
 - `docs/PERFORMANCE_BASELINE.md`
 - `docs/LOCKFILE_RECOVERY.md`
+- `docs/INSTALL_TROUBLESHOOTING.md`
 
 ## Current limitations
 

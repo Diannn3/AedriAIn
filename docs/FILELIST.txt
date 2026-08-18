@@ -6,6 +6,7 @@ README.md
 docs/ARCHITECTURE.md
 docs/BUILD_REPORT.md
 docs/FILELIST.txt
+docs/INSTALL_TROUBLESHOOTING.md
 docs/LOCKFILE_RECOVERY.md
 docs/PERFORMANCE_BASELINE.md
 docs/RESEARCH.md
@@ -25,13 +26,16 @@ public/pdfjs/cmaps/.gitkeep
 public/pdfjs/iccs/.gitkeep
 public/pdfjs/standard_fonts/.gitkeep
 public/pdfjs/wasm/.gitkeep
+scripts/bootstrap-project.mjs
 scripts/clone-references.sh
 scripts/electron-smoke.mjs
 scripts/generate-filelist.mjs
-scripts/test-core.sh
+scripts/test-core.mjs
 scripts/test-file-resource.cjs
+scripts/test-install-guard.mjs
 scripts/vendor-mediapipe.mjs
 scripts/vendor-pdfjs.mjs
+scripts/verify-install.mjs
 scripts/verify-lockfile.mjs
 scripts/verify-mediapipe-assets.mjs
 scripts/verify-pdfjs-assets.mjs

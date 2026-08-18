@@ -1,13 +1,36 @@
-#!/usr/bin/env bash
-set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="${TMPDIR:-/tmp}/spatial-desktop-core-tests"
-rm -rf "$OUT"
-mkdir -p "$OUT"
-cd "$ROOT"
+import assert from 'node:assert/strict';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 
-tsc src/input/hand/types.ts src/input/hand/gestures.ts src/input/hand/HandIdentityTracker.ts --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/gesture" --strict --skipLibCheck
-cat > "$OUT/gesture/test.cjs" <<'TEST'
+const root = process.cwd();
+const out = await mkdtemp(path.join(os.tmpdir(), 'aedriain-core-tests-'));
+const resolveBin = async (name) => {
+  const local = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name);
+  try { await access(local); return local; } catch { return process.platform === 'win32' ? `${name}.cmd` : name; }
+};
+
+const run = (command, args, cwd = root) => {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: 'inherit',
+    shell: process.platform === 'win32' && command.endsWith('.cmd'),
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+};
+
+const tsc = await resolveBin('tsc');
+
+try {
+  const gestureOut = path.join(out, 'gesture');
+  run(tsc, [
+    'src/input/hand/types.ts', 'src/input/hand/gestures.ts', 'src/input/hand/HandIdentityTracker.ts',
+    '--target', 'ES2022', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', gestureOut, '--strict', '--skipLibCheck',
+  ]);
+  await writeFile(path.join(gestureOut, 'test.cjs'), `
 const assert = require('node:assert/strict');
 const { GestureEngine, getPinchStrength, classifyPose } = require('./gestures.js');
 const { HandIdentityTracker } = require('./HandIdentityTracker.js');
@@ -47,11 +70,15 @@ const second = tracker.update([
 assert.equal(first[0].trackingId, second[1].trackingId);
 assert.equal(first[1].trackingId, second[0].trackingId);
 console.log('gesture-engine: PASS');
-TEST
-node "$OUT/gesture/test.cjs"
+`);
+  run(process.execPath, [path.join(gestureOut, 'test.cjs')]);
 
-tsc src/core/types.ts src/commands/types.ts src/commands/localParser.ts --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/commands" --strict --skipLibCheck
-cat > "$OUT/commands/test.cjs" <<'TEST'
+  const commandOut = path.join(out, 'commands');
+  run(tsc, [
+    'src/core/types.ts', 'src/commands/types.ts', 'src/commands/localParser.ts',
+    '--target', 'ES2022', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', commandOut, '--strict', '--skipLibCheck',
+  ]);
+  await writeFile(path.join(commandOut, 'test.cjs'), `
 const assert = require('node:assert/strict');
 const { parseLocalCommand } = require('./commands/localParser.js');
 assert.deepEqual(parseLocalCommand('open map'), { type: 'APP_OPEN', appId: 'map' });
@@ -64,23 +91,29 @@ assert.deepEqual(parseLocalCommand('reset workspace'), { type: 'WORKSPACE_RESET'
 assert.deepEqual(parseLocalCommand('hide all'), { type: 'WORKSPACE_SET_ALL', open: false });
 assert.equal(parseLocalCommand('make me coffee'), null);
 console.log('command-parser: PASS');
-TEST
-node "$OUT/commands/test.cjs"
+`);
+  run(process.execPath, [path.join(commandOut, 'test.cjs')]);
 
-
-tsc src/input/hand/types.ts src/spatial/handSelection.ts --rootDir src --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/selection" --strict --skipLibCheck
-cat > "$OUT/selection/test.cjs" <<'TEST'
+  const selectionOut = path.join(out, 'selection');
+  run(tsc, [
+    'src/input/hand/types.ts', 'src/spatial/handSelection.ts', '--rootDir', 'src',
+    '--target', 'ES2022', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', selectionOut, '--strict', '--skipLibCheck',
+  ]);
+  await writeFile(path.join(selectionOut, 'test.cjs'), `
 const assert = require('node:assert/strict');
 const { choosePrimaryHand } = require('./spatial/handSelection.js');
 const hand = (id, handedness, gesture, pinching=false, score=.9) => ({ id, handedness, gesture, pinching, score, pointer:{x:.5,y:.5}, pinchPoint:{x:.5,y:.5}, pinchStrength:1 });
 assert.equal(choosePrimaryHand([hand('left','Left','POINT'),hand('right','Right','IDLE')], 'right').id, 'right');
 assert.equal(choosePrimaryHand([hand('point','Left','POINT'),hand('pinch','Right','PINCH',true)]).id, 'pinch');
 console.log('hand-selection: PASS');
-TEST
-node "$OUT/selection/test.cjs"
+`);
+  run(process.execPath, [path.join(selectionOut, 'test.cjs')]);
 
-tsc src/ui/virtualMath.ts --target ES2022 --module commonjs --moduleResolution node --outDir "$OUT/virtual" --strict --skipLibCheck
-cat > "$OUT/virtual/test.cjs" <<'TEST'
+  const virtualOut = path.join(out, 'virtual');
+  run(tsc, [
+    'src/ui/virtualMath.ts', '--target', 'ES2022', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', virtualOut, '--strict', '--skipLibCheck',
+  ]);
+  await writeFile(path.join(virtualOut, 'test.cjs'), `
 const assert = require('node:assert/strict');
 const { getVisibleRange } = require('./virtualMath.js');
 const count = 1000;
@@ -96,5 +129,10 @@ assert.ok(nearEnd.start > 980);
 assert.equal(nearEnd.end, 993);
 assert.ok(nearEnd.end - nearEnd.start < 15);
 console.log('virtual-range: PASS');
-TEST
-node "$OUT/virtual/test.cjs"
+`);
+  run(process.execPath, [path.join(virtualOut, 'test.cjs')]);
+
+  assert.ok(true);
+} finally {
+  await rm(out, { recursive: true, force: true });
+}

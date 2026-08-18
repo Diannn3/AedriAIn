@@ -1,12 +1,28 @@
 # Documents V1.1 validation matrix
 
+## Local dependency guardrails
+
+AedriAIn now verifies the actual direct package versions installed in `node_modules` before Vite or Electron development starts. This catches branch changes where an older install still contains Vite/React but is missing a newer package such as Dexie.
+
+Use:
+
+```bash
+npm run doctor
+```
+
+Repair cross-platform with:
+
+```bash
+npm run bootstrap
+```
+
+The bootstrap chooses `npm ci` when the committed lockfile is valid or `npm install` when the lock is missing/stale, clears the Vite dependency cache, stages local runtime assets, and re-verifies the environment.
+
 ## Environment boundary
 
-The implementation environment has Node 22 plus global TypeScript and basic parsing tools, but shell DNS cannot resolve npm/GitHub hosts. A literal clone and dependency install were attempted first and failed at network resolution.
+The implementation environment has Node 22 plus global TypeScript and basic parsing tools, but shell DNS cannot resolve npm/GitHub hosts. A dependency-aware install cannot be truthfully completed here, so the networked lockfile/CI gate remains part of validation.
 
-The working source was reconstructed from the exact Documents V1 bundle produced in the previous milestone and reconciled against the pushed `documents-v1` branch. The pushed branch additionally contained a stale `package-lock.json`, which was audited separately and found not to match the current package manifest.
-
-## Dependency-light validation available here
+## Bootstrap validation available here
 
 Run before every freeze:
 
@@ -20,7 +36,10 @@ node --check scripts/vendor-pdfjs.mjs
 node --check scripts/verify-mediapipe-assets.mjs
 node --check scripts/verify-pdfjs-assets.mjs
 node --check scripts/verify-lockfile.mjs
-bash -n scripts/test-core.sh
+node --check scripts/verify-install.mjs
+node --check scripts/bootstrap-project.mjs
+node --check scripts/test-core.mjs
+node --check scripts/test-install-guard.mjs
 ```
 
 The final freeze also performs:
@@ -40,7 +59,7 @@ The final freeze also performs:
 
 `node scripts/verify-lockfile.mjs` checks that contract.
 
-Because a real npm resolution cannot run in this environment, CI's first `lockfile` job is allowed to regenerate a missing/stale lockfile on a networked GitHub runner. It uploads one `aedriain-lockfile` artifact. Every downstream job downloads that same file before running `npm ci`.
+Because a real npm resolution cannot run in this environment, CI's first `lockfile` job is allowed to regenerate a missing/stale lockfile on a networked GitHub runner. It uploads one `aedriain-lockfile` artifact. Every downstream job downloads that same file before running `npm ci`, then runs `npm run verify:install` to confirm the installed direct package versions.
 
 After the first green networked run, the generated lockfile should be committed. See `docs/LOCKFILE_RECOVERY.md`.
 
@@ -177,7 +196,7 @@ CSS parse: PASS
 CI YAML parse: PASS
 JSON parse: PASS
 PDF fixture sanity: PASS · 3 fixtures
-FILELIST: PASS · 110 project files
+FILELIST: PASS · 114 project files
 runtime milestone labels: PASS · Documents V1.1
 ```
 

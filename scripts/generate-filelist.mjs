@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readdir, writeFile } from 'node:fs/promises';
+import { access, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -10,9 +10,13 @@ const excludedDirs = new Set(['.git', 'node_modules', 'dist', 'references', 'pla
 
 async function gitFiles() {
   try {
-    const { stdout } = await execFileAsync('git', ['ls-files'], { cwd: root });
+    const { stdout } = await execFileAsync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: root });
     const files = stdout.split(/\r?\n/).filter(Boolean);
-    return files.length ? files : null;
+    const existing = [];
+    for (const file of files) {
+      try { await access(path.join(root, file)); existing.push(file); } catch { /* staged deletion */ }
+    }
+    return existing.length ? existing : null;
   } catch {
     return null;
   }

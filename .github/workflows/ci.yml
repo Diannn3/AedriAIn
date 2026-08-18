@@ -52,6 +52,7 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: node scripts/verify-lockfile.mjs
       - run: npm ci
+      - run: npm run verify:install
       - name: Bootstrap regressions
         run: npm run test:bootstrap
       - name: Stage local runtime assets
@@ -78,6 +79,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npm run verify:install
       - run: npm run setup
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -104,6 +106,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npm run verify:install
       - run: npm run setup
       - run: npm run build
       - name: Production Electron smoke
